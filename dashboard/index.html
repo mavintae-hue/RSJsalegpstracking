@@ -21,7 +21,9 @@
         }
 
         #map {
-            height: 480px;
+            height: 60vh;
+            min-height: 350px;
+            max-height: 600px;
             width: 100%;
             z-index: 10;
         }
@@ -172,27 +174,29 @@
 <body class="text-slate-800 antialiased">
 
     <!-- Navbar -->
-    <nav class="glass-nav text-white p-4 shadow-lg sticky top-0 z-[50]">
+    <nav class="glass-nav text-white p-3 sm:p-4 shadow-lg sticky top-0 z-[50]">
         <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <div class="bg-blue-600 p-2 rounded-lg shadow-inner text-white animate-pulse">
-                    <i class="ph-bold ph-map-pin-line text-2xl"></i>
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="bg-blue-600 p-1.5 sm:p-2 rounded-lg shadow-inner text-white animate-pulse">
+                    <i class="ph-bold ph-map-pin-line text-xl sm:text-2xl"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold tracking-wide">Sales Geofence Tracker</h1>
-                    <p class="text-[10px] text-blue-200 -mt-1 uppercase tracking-wider">Real-time Monitoring System</p>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-wide leading-tight">Sales Geofence Tracker</h1>
+                    <p class="text-[9px] sm:text-[10px] text-blue-200 -mt-0.5 uppercase tracking-wider hidden sm:block">
+                        Real-time Monitoring System</p>
                 </div>
             </div>
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2 sm:space-x-4">
                 <button onclick="toggleUploadModal()"
-                    class="text-sm bg-white/10 border border-white/20 px-4 py-2 rounded-xl hover:bg-white/20 transition-all duration-300 flex items-center space-x-2 shadow-sm">
-                    <i class="ph-bold ph-file-arrow-up"></i> <span>นำเข้าข้อมูลลูกค้า</span>
+                    class="text-xs sm:text-sm bg-white/10 border border-white/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl hover:bg-white/20 transition-all duration-300 flex items-center space-x-1 sm:space-x-2 shadow-sm">
+                    <i class="ph-bold ph-file-arrow-up text-lg"></i> <span
+                        class="hidden sm:inline">นำเข้าข้อมูลลูกค้า</span>
                 </button>
-                <div class="h-8 w-px bg-white/20 mx-1"></div>
+                <div class="h-6 sm:h-8 w-px bg-white/20 mx-0 sm:mx-1"></div>
                 <span
-                    class="text-sm bg-slate-900/40 border border-white/10 px-4 py-1.5 rounded-full flex items-center shadow-inner">
-                    <i class="ph-bold ph-clock mr-2 text-blue-300"></i> <span id="clock"
-                        class="font-mono font-medium">10:00:00</span>
+                    class="text-xs sm:text-sm bg-slate-900/40 border border-white/10 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full flex items-center shadow-inner">
+                    <i class="ph-bold ph-clock sm:mr-2 text-blue-300"></i> <span id="clock"
+                        class="font-mono font-medium hidden sm:inline">10:00:00</span>
                 </span>
             </div>
         </div>
@@ -202,7 +206,7 @@
     <div class="container mx-auto p-4 mt-4">
 
         <!-- Top Stats -->
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div
                 class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 interactive-card animate-fade-in-up flex flex-col justify-center">
                 <div class="flex items-center space-x-3 mb-1">
@@ -283,31 +287,35 @@
                 class="lg:col-span-2 bg-white p-3 rounded-2xl shadow-md border border-slate-200 overflow-hidden relative group flex flex-col">
 
                 <!-- Filter Control Panel -->
-                <div class="mb-3 px-2 flex flex-wrap gap-3 items-center z-20 relative bg-white rounded-xl">
-                    <span class="text-sm font-bold text-slate-700 flex items-center"><i
-                            class="ph-fill ph-funnel mr-1.5 text-blue-500"></i> ตัวกรอง:</span>
+                <div
+                    class="mb-3 px-1 sm:px-2 flex flex-col sm:flex-row gap-3 items-start sm:items-center z-20 relative bg-white rounded-xl">
 
-                    <div class="flex space-x-2" id="filter-container">
-                        <!-- Dynamic Checkboxes injected here -->
+                    <div class="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0"
+                        style="scrollbar-width: none;">
+                        <span class="text-sm font-bold text-slate-700 flex items-center shrink-0"><i
+                                class="ph-fill ph-funnel mr-1.5 text-blue-500"></i> ตัวกรอง:</span>
+                        <div class="flex space-x-2 shrink-0" id="filter-container">
+                            <!-- Dynamic Checkboxes injected here -->
+                        </div>
                     </div>
 
-                    <div class="h-6 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+                    <div class="h-px w-full sm:h-6 sm:w-px bg-slate-200 my-1 sm:my-0 sm:mx-1 hidden sm:block"></div>
 
                     <!-- Date Picker & Time History Selector -->
-                    <div class="flex items-center space-x-2 flex-grow justify-end">
+                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
                         <div
-                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm flex-1 sm:flex-none justify-center">
                             <div class="px-2 text-slate-500"><i class="ph-bold ph-calendar-blank"></i></div>
                             <input type="date" id="history-date" value="2026-02-20"
-                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer w-[110px]"
+                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer w-full max-w-[120px]"
                                 onchange="updatePathHistory()">
                         </div>
 
                         <div
-                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm flex-1 sm:flex-none justify-center">
                             <div class="px-2 text-slate-500"><i class="ph-bold ph-clock-counter-clockwise"></i></div>
                             <select id="path-history-select" onchange="updatePathHistory()"
-                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer pr-2">
+                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer pr-2 w-full max-w-[100px]">
                                 <option value="1">ย้อน 1 ชม.</option>
                                 <option value="3">ย้อน 3 ชม.</option>
                                 <option value="6">ย้อน 6 ชม.</option>
@@ -328,22 +336,24 @@
                 </div>
 
                 <!-- Legend -->
-                <div
-                    class="bg-slate-50 p-3 mt-2 rounded-xl border border-slate-100 flex flex-wrap gap-4 text-[11px] text-slate-600 font-medium">
-                    <div class="flex items-center"><span
+                <div class="bg-slate-50 p-3 mt-2 rounded-xl border border-slate-100 flex overflow-x-auto whitespace-nowrap gap-4 text-[11px] text-slate-600 font-medium"
+                    style="scrollbar-width: none;">
+                    <div class="flex items-center shrink-0"><span
                             class="w-3.5 h-3.5 border border-orange-400 rounded mr-1.5 bg-orange-100 bg-opacity-50"></span>
                         เขตรับผิดชอบ</div>
-                    <div class="flex items-center"><span
+                    <div class="flex items-center shrink-0"><span
                             class="w-3.5 h-3.5 border-2 border-emerald-500 rounded-full mr-1.5 bg-emerald-100"></span>
                         รัศมีร้านค้า 40m</div>
-                    <div class="flex items-center"><i
+                    <div class="flex items-center shrink-0"><i
                             class="ph-fill ph-storefront text-emerald-500 mr-1 text-base drop-shadow-sm"></i>
                         ร้านที่เยี่ยมแล้ว</div>
-                    <div class="flex items-center"><span class="w-2.5 h-2.5 bg-slate-400 rounded-full mr-1.5"></span>
+                    <div class="flex items-center shrink-0"><span
+                            class="w-2.5 h-2.5 bg-slate-400 rounded-full mr-1.5"></span>
                         ร้านยังไม่เยี่ยม</div>
-                    <div class="flex items-center"><i class="ph-bold ph-trend-up text-slate-500 mr-1 text-sm"></i> <span
+                    <div class="flex items-center shrink-0"><i
+                            class="ph-bold ph-trend-up text-slate-500 mr-1 text-sm"></i> <span
                             id="legend-path-text">เส้นทาง (ย้อนหลัง 1 ชม.)</span></div>
-                    <div class="flex items-center"><i
+                    <div class="flex items-center shrink-0"><i
                             class="ph-fill ph-car-profile text-rose-600 mr-1 text-lg drop-shadow-md"></i> ออกนอกเขต
                     </div>
                 </div>
@@ -375,37 +385,36 @@
                 <h2 class="text-base font-bold flex items-center text-slate-800"><i
                         class="ph-fill ph-table mr-2 text-blue-600 text-xl"></i> บันทึกการเข้าเยี่ยมร้านค้า</h2>
 
-                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <div
+                    class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full md:w-auto mt-3 md:mt-0">
                     <div
-                        class="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
-                        <i class="ph-bold ph-calendar-blank text-slate-400"></i>
+                        class="flex items-center justify-between sm:justify-start space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm overflow-hidden">
+                        <i class="ph-bold ph-calendar-blank text-slate-400 shrink-0"></i>
                         <input type="date" id="report-start-date"
-                            class="text-sm text-slate-600 focus:outline-none bg-transparent">
-                        <span class="text-slate-400 text-xs">ถึง</span>
+                            class="text-sm text-slate-600 focus:outline-none bg-transparent w-full min-w-[100px]">
+                        <span class="text-slate-400 text-xs shrink-0">ถึง</span>
                         <input type="date" id="report-end-date"
-                            class="text-sm text-slate-600 focus:outline-none bg-transparent">
+                            class="text-sm text-slate-600 focus:outline-none bg-transparent w-full min-w-[100px]">
                     </div>
 
-                    <button onclick="loadTableData()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center">
-                        <i class="ph-bold ph-funnel mr-1.5"></i> กรองข้อมูล
-                    </button>
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button onclick="loadTableData()"
+                            class="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 sm:py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center">
+                            <i class="ph-bold ph-funnel mr-1.5"></i> กรอง
+                        </button>
 
-                    <button
-                        class="bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-lg text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
-                        <i class="ph-bold ph-export mr-1"></i> Export Excel
-                    </button>
+                        <button
+                            class="flex-1 sm:flex-none justify-center bg-white border border-slate-300 text-slate-700 px-4 py-2 sm:py-1.5 rounded-lg text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
+                            <i class="ph-bold ph-export mr-1"></i> Export
+                        </button>
+                    </div>
 
                     <a href="analytics.html"
-                        class="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-1.5 rounded-lg text-sm hover:bg-indigo-100 transition-colors shadow-sm font-bold flex items-center ml-auto md:ml-2">
+                        class="w-full sm:w-auto justify-center bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 sm:py-1.5 rounded-lg text-sm hover:bg-indigo-100 transition-colors shadow-sm font-bold flex items-center mt-1 sm:mt-0">
                         <i class="ph-fill ph-chart-line-up mr-1.5"></i> BI Dashboard
                     </a>
                 </div>
             </div>
-            <button
-                class="bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-lg text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
-                <i class="ph-bold ph-export mr-1"></i> Export Report
-            </button>
         </div>
         <div class="overflow-x-auto p-4">
             <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap">
@@ -433,9 +442,9 @@
 
     <!-- Upload Modal -->
     <div id="upload-modal"
-        class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center transition-opacity duration-300">
+        class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center transition-opacity duration-300 p-4">
         <div
-            class="bg-white rounded-2xl shadow-2xl w-[400px] p-0 relative animate-modal-pop border border-slate-100 overflow-hidden">
+            class="bg-white rounded-2xl shadow-2xl w-full max-w-[400px] p-0 relative animate-modal-pop border border-slate-100 overflow-hidden">
             <div class="bg-slate-50 p-5 border-b border-slate-100 flex justify-between items-center">
                 <h2 class="text-lg font-bold flex items-center text-slate-800">
                     <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3"><i
