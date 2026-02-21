@@ -53,10 +53,14 @@ function initMap() {
     document.getElementById('alerts-container').innerHTML = ''; // Clear default
     document.getElementById('visits-table-body').innerHTML = '';
 
+    setDefaultDates();
     loadCustomers();
     loadTerritories();
     loadLatestStaffLocations();
     subscribeToGPSLogs();
+
+    // Automatically load the table data for today on startup
+    loadTableData();
 }
 
 // ----------------------------------------------------
@@ -89,6 +93,17 @@ async function loadCustomers() {
             customerMarkers.push(marker);
         }
     });
+}
+
+function setDefaultDates() {
+    const today = new Date().toISOString().split('T')[0];
+    const historyDateInput = document.getElementById('history-date');
+    const reportStartDateInput = document.getElementById('report-start-date');
+    const reportEndDateInput = document.getElementById('report-end-date');
+
+    if (historyDateInput) historyDateInput.value = today;
+    if (reportStartDateInput) reportStartDateInput.value = today;
+    if (reportEndDateInput) reportEndDateInput.value = today;
 }
 
 async function loadTerritories() {
