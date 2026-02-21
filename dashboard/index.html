@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบติดตามพนักงานขาย (Geofencing Tracker)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        /* Import Font: Prompt */
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Prompt', 'Segoe UI', Tahoma, sans-serif;
+            background-color: #f8fafc;
+        }
+
+        #map {
+            height: 480px;
+            width: 100%;
+            z-index: 10;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in-up {
+            opacity: 0;
+            animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .animate-slide-in-right {
+            opacity: 0;
+            animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes modalPop {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .animate-modal-pop {
+            animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Animation Delays */
+        .delay-100 {
+            animation-delay: 100ms;
+        }
+
+        .delay-200 {
+            animation-delay: 200ms;
+        }
+
+        .delay-300 {
+            animation-delay: 300ms;
+        }
+
+        .delay-400 {
+            animation-delay: 400ms;
+        }
+
+        /* Interactive Elements */
+        .interactive-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .interactive-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.1);
+        }
+
+        .interactive-row {
+            transition: all 0.2s ease;
+        }
+
+        .interactive-row:hover {
+            background-color: #f1f5f9;
+            transform: scale(1.002);
+        }
+
+        .out-of-bounds-glow {
+            filter: drop-shadow(0 0 10px rgba(225, 29, 72, 0.7));
+        }
+
+        .glass-nav {
+            background: rgba(30, 58, 138, 0.95);
+            backdrop-filter: blur(8px);
+        }
+
+        /* Filter Toggle Buttons CSS */
+        .filter-checkbox:checked+.filter-label {
+            background-color: var(--active-bg);
+            border-color: var(--active-border);
+            color: var(--active-text);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .filter-checkbox:not(:checked)+.filter-label {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+            color: #64748b;
+            opacity: 0.7;
+        }
+
+        /* Moving Path Animation for Leaflet Polyline */
+        @keyframes dash-flow {
+            to {
+                stroke-dashoffset: -20;
+            }
+        }
+
+        .moving-path {
+            animation: dash-flow 1s linear infinite;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800 antialiased">
+
+    <!-- Navbar -->
+    <nav class="glass-nav text-white p-4 shadow-lg sticky top-0 z-[50]">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg shadow-inner text-white animate-pulse">
+                    <i class="ph-bold ph-map-pin-line text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">Sales Geofence Tracker</h1>
+                    <p class="text-[10px] text-blue-200 -mt-1 uppercase tracking-wider">Real-time Monitoring System</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleUploadModal()"
+                    class="text-sm bg-white/10 border border-white/20 px-4 py-2 rounded-xl hover:bg-white/20 transition-all duration-300 flex items-center space-x-2 shadow-sm">
+                    <i class="ph-bold ph-file-arrow-up"></i> <span>นำเข้าข้อมูลลูกค้า</span>
+                </button>
+                <div class="h-8 w-px bg-white/20 mx-1"></div>
+                <span
+                    class="text-sm bg-slate-900/40 border border-white/10 px-4 py-1.5 rounded-full flex items-center shadow-inner">
+                    <i class="ph-bold ph-clock mr-2 text-blue-300"></i> <span id="clock"
+                        class="font-mono font-medium">10:00:00</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto p-4 mt-4">
+
+        <!-- Top Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <div
+                class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 interactive-card animate-fade-in-up flex flex-col justify-center">
+                <div class="flex items-center space-x-3 mb-1">
+                    <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600"><i
+                            class="ph-fill ph-users"></i></div>
+                    <div class="text-slate-500 text-[10px] font-medium leading-tight">พนักงาน<br>ทั้งหมด</div>
+                </div>
+                <div class="text-xl font-bold text-slate-800" id="stat-staff-total">0 <span
+                        class="text-[10px] font-normal text-slate-400">คน</span></div>
+            </div>
+
+            <div
+                class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 interactive-card animate-fade-in-up delay-100 flex flex-col justify-center relative overflow-hidden">
+                <div class="absolute -right-4 -top-4 w-12 h-12 bg-emerald-50 rounded-full opacity-50"></div>
+                <div class="flex items-center space-x-3 mb-1 relative z-10">
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                        <i class="ph-fill ph-storefront"></i>
+                    </div>
+                    <div class="text-slate-500 text-[10px] font-medium leading-tight">กำลังเยี่ยม<br>ลูกค้า</div>
+                </div>
+                <div class="text-xl font-bold text-emerald-600 relative z-10" id="stat-staff-visiting">0 <span
+                        class="text-[10px] font-normal text-slate-400">คน</span></div>
+            </div>
+
+            <div
+                class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 interactive-card animate-fade-in-up delay-200 flex flex-col justify-center">
+                <div class="flex items-center space-x-3 mb-1">
+                    <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500"><i
+                            class="ph-fill ph-car-profile"></i></div>
+                    <div class="text-slate-500 text-[10px] font-medium leading-tight">เดินทาง<br>(ในเขต)</div>
+                </div>
+                <div class="text-xl font-bold text-amber-600" id="stat-staff-driving">0 <span
+                        class="text-[10px] font-normal text-slate-400">คน</span></div>
+            </div>
+
+            <div
+                class="bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-200 interactive-card animate-fade-in-up delay-300 flex flex-col justify-center relative">
+                <div class="flex items-center space-x-3 mb-1">
+                    <div
+                        class="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 animate-pulse">
+                        <i class="ph-fill ph-warning-octagon"></i>
+                    </div>
+                    <div class="text-rose-600 text-[10px] font-bold uppercase tracking-wider leading-tight">
+                        ออกนอกเขต<br>ผิดปกติ!</div>
+                </div>
+                <div class="text-xl font-bold text-rose-700" id="stat-staff-out">0 <span
+                        class="text-[10px] font-normal text-rose-500">คน</span></div>
+            </div>
+
+            <div
+                class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 interactive-card animate-fade-in-up delay-400 flex flex-col justify-center">
+                <div class="flex items-center space-x-3 mb-1">
+                    <div class="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500"><i
+                            class="ph-fill ph-map-trifold"></i></div>
+                    <div class="text-slate-500 text-[10px] font-medium leading-tight">ร้านค้า<br>ในระบบ</div>
+                </div>
+                <div class="text-xl font-bold text-indigo-600" id="stat-store-total">0 <span
+                        class="text-[10px] font-normal text-slate-400">ร้าน</span></div>
+            </div>
+
+            <!-- Mileage Stat -->
+            <div
+                class="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-2xl shadow-md border border-blue-400 interactive-card animate-fade-in-up delay-500 flex flex-col justify-center text-white">
+                <div class="flex items-center space-x-3 mb-1">
+                    <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white"><i
+                            class="ph-fill ph-gas-pump"></i></div>
+                    <div class="text-blue-100 text-[10px] font-medium leading-tight">จำลอง<br>ระยะทางวันนี้</div>
+                </div>
+                <div class="text-xl font-bold text-white">250 <span
+                        class="text-[10px] font-normal text-blue-200">กม.</span></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up delay-200">
+
+            <!-- Map Section -->
+            <div
+                class="lg:col-span-2 bg-white p-3 rounded-2xl shadow-md border border-slate-200 overflow-hidden relative group flex flex-col">
+
+                <!-- Filter Control Panel -->
+                <div class="mb-3 px-2 flex flex-wrap gap-3 items-center z-20 relative bg-white rounded-xl">
+                    <span class="text-sm font-bold text-slate-700 flex items-center"><i
+                            class="ph-fill ph-funnel mr-1.5 text-blue-500"></i> ตัวกรอง:</span>
+
+                    <div class="flex space-x-2" id="filter-container">
+                        <!-- Dynamic Checkboxes injected here -->
+                    </div>
+
+                    <div class="h-6 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+
+                    <!-- Date Picker & Time History Selector -->
+                    <div class="flex items-center space-x-2 flex-grow justify-end">
+                        <div
+                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                            <div class="px-2 text-slate-500"><i class="ph-bold ph-calendar-blank"></i></div>
+                            <input type="date" id="history-date" value="2026-02-20"
+                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer w-[110px]"
+                                onchange="updatePathHistory()">
+                        </div>
+
+                        <div
+                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                            <div class="px-2 text-slate-500"><i class="ph-bold ph-clock-counter-clockwise"></i></div>
+                            <select id="path-history-select" onchange="updatePathHistory()"
+                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer pr-2">
+                                <option value="1">ย้อน 1 ชม.</option>
+                                <option value="3">ย้อน 3 ชม.</option>
+                                <option value="6">ย้อน 6 ชม.</option>
+                                <option value="all">ทั้งวัน</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative rounded-xl overflow-hidden border border-slate-200">
+                    <div
+                        class="absolute top-4 right-4 z-[400] bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm border border-emerald-100 flex items-center">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping mr-2"></span> <span
+                            id="realtimeStatus">อัปเดตแบบ Real-time</span>
+                    </div>
+                    <!-- Map Container -->
+                    <div id="map" class="rounded-xl"></div>
+                </div>
+
+                <!-- Legend -->
+                <div
+                    class="bg-slate-50 p-3 mt-2 rounded-xl border border-slate-100 flex flex-wrap gap-4 text-[11px] text-slate-600 font-medium">
+                    <div class="flex items-center"><span
+                            class="w-3.5 h-3.5 border border-orange-400 rounded mr-1.5 bg-orange-100 bg-opacity-50"></span>
+                        เขตรับผิดชอบ</div>
+                    <div class="flex items-center"><span
+                            class="w-3.5 h-3.5 border-2 border-emerald-500 rounded-full mr-1.5 bg-emerald-100"></span>
+                        รัศมีร้านค้า 40m</div>
+                    <div class="flex items-center"><i
+                            class="ph-fill ph-storefront text-emerald-500 mr-1 text-base drop-shadow-sm"></i>
+                        ร้านที่เยี่ยมแล้ว</div>
+                    <div class="flex items-center"><span class="w-2.5 h-2.5 bg-slate-400 rounded-full mr-1.5"></span>
+                        ร้านยังไม่เยี่ยม</div>
+                    <div class="flex items-center"><i class="ph-bold ph-trend-up text-slate-500 mr-1 text-sm"></i> <span
+                            id="legend-path-text">เส้นทาง (ย้อนหลัง 1 ชม.)</span></div>
+                    <div class="flex items-center"><i
+                            class="ph-fill ph-car-profile text-rose-600 mr-1 text-lg drop-shadow-md"></i> ออกนอกเขต
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Alerts -->
+            <div
+                class="bg-white rounded-2xl shadow-md border border-slate-200 h-full flex flex-col overflow-hidden animate-fade-in-up delay-300">
+                <div class="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h2 class="text-base font-bold flex items-center text-slate-800"><i
+                            class="ph-fill ph-bell-ringing mr-2 text-amber-500 text-xl"></i> แจ้งเตือนล่าสุด</h2>
+                    <span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold"
+                        id="alert-counter">เตรียมพร้อมระบบ</span>
+                </div>
+                <div class="p-4 space-y-3 flex-grow overflow-y-auto" style="max-height: 480px;" id="alerts-container">
+                    <!-- Dynamic Alerts will populate here-->
+                    <div
+                        class="p-4 bg-white rounded-xl border border-slate-100 shadow-sm text-center text-sm text-slate-500">
+                        กำลังเชื่อมต่อฐานข้อมูล...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div
+            class="bg-white rounded-2xl shadow-md border border-slate-200 mt-6 overflow-hidden animate-fade-in-up delay-400">
+            <div
+                class="p-5 border-b border-slate-100 flex flex-col md:flex-row md:justify-between items-start md:items-center bg-slate-50 gap-4">
+                <h2 class="text-base font-bold flex items-center text-slate-800"><i
+                        class="ph-fill ph-table mr-2 text-blue-600 text-xl"></i> บันทึกการเข้าเยี่ยมร้านค้า</h2>
+
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div
+                        class="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
+                        <i class="ph-bold ph-calendar-blank text-slate-400"></i>
+                        <input type="date" id="report-start-date"
+                            class="text-sm text-slate-600 focus:outline-none bg-transparent">
+                        <span class="text-slate-400 text-xs">ถึง</span>
+                        <input type="date" id="report-end-date"
+                            class="text-sm text-slate-600 focus:outline-none bg-transparent">
+                    </div>
+
+                    <button onclick="loadTableData()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center">
+                        <i class="ph-bold ph-funnel mr-1.5"></i> กรองข้อมูล
+                    </button>
+
+                    <button
+                        class="bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-lg text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
+                        <i class="ph-bold ph-export mr-1"></i> Export Excel
+                    </button>
+
+                    <a href="analytics.html"
+                        class="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-1.5 rounded-lg text-sm hover:bg-indigo-100 transition-colors shadow-sm font-bold flex items-center ml-auto md:ml-2">
+                        <i class="ph-fill ph-chart-line-up mr-1.5"></i> BI Dashboard
+                    </a>
+                </div>
+            </div>
+            <button
+                class="bg-white border border-slate-300 text-slate-700 px-4 py-1.5 rounded-lg text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
+                <i class="ph-bold ph-export mr-1"></i> Export Report
+            </button>
+        </div>
+        <div class="overflow-x-auto p-4">
+            <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap">
+                <thead>
+                    <tr>
+                        <th class="p-3 font-semibold text-slate-500 bg-slate-50 rounded-l-xl">สายวิ่ง (พนักงาน)</th>
+                        <th class="p-3 font-semibold text-slate-500 bg-slate-50">ร้านค้าที่เข้าเยี่ยม</th>
+                        <th class="p-3 text-center font-semibold text-blue-700 bg-blue-50/50">เข้า-ออกร้าน</th>
+                        <th class="p-3 text-center font-semibold text-blue-700 bg-blue-50/50">เวลาในร้าน (Dwell)
+                        </th>
+                        <th class="p-3 text-center font-semibold text-emerald-700 bg-emerald-50/50">ประเภทการเยี่ยม
+                        </th>
+                        <th class="p-3 text-center font-semibold text-indigo-700 bg-indigo-50/50">ระยะทาง (กม.)</th>
+                        <th class="p-3 font-semibold text-center text-slate-500 bg-slate-50 rounded-r-xl">
+                            สถานะอุปกรณ์</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100" id="visits-table-body">
+                    <!-- Simulated Table For Now -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal"
+        class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center transition-opacity duration-300">
+        <div
+            class="bg-white rounded-2xl shadow-2xl w-[400px] p-0 relative animate-modal-pop border border-slate-100 overflow-hidden">
+            <div class="bg-slate-50 p-5 border-b border-slate-100 flex justify-between items-center">
+                <h2 class="text-lg font-bold flex items-center text-slate-800">
+                    <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3"><i
+                            class="ph-fill ph-file-xls text-lg"></i></div>นำเข้าข้อมูลลูกค้า
+                </h2>
+                <button onclick="toggleUploadModal()"
+                    class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"><i
+                        class="ph-bold ph-x"></i></button>
+            </div>
+            <div class="p-6">
+                <!-- Using ID from our app.js to bind event correctly but styling it with the new UI -->
+                <div
+                    class="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl p-8 text-center hover:bg-blue-50 transition cursor-pointer relative">
+                    <input type="file" id="excelFile" accept=".xlsx, .xls"
+                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        onchange="handleFileSelect(event)">
+                    <div
+                        class="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4">
+                        <i class="ph-bold ph-upload-simple text-3xl text-blue-500"></i>
+                    </div>
+                    <p class="text-sm text-slate-700 font-semibold mb-1" id="fileNameDisplay">คลิก หรือ
+                        ลากไฟล์มาวางที่นี่</p>
+                </div>
+                <div id="uploadStatus" class="mt-3 text-sm hidden font-medium text-center"></div>
+                <div class="mt-6 pt-5 flex justify-between gap-3 bg-white">
+                    <button id="btnUpload" onclick="processExcelUpload()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex-1 shadow-md">
+                        นำเข้าข้อมูลไปยังระบบ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <script>
+        function toggleUploadModal() {
+            const modal = document.getElementById('upload-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        // Clock System
+        setInterval(() => {
+            const now = new Date();
+            if (document.getElementById('clock')) {
+                document.getElementById('clock').innerText = now.toLocaleTimeString('th-TH');
+            }
+        }, 1000);
+    </script>
+    <script src="app.js"></script>
+</body>
+
+</html>
