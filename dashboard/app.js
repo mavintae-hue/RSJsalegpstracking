@@ -261,7 +261,7 @@ function updateMarkerUI(staff, logData) {
                     <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold mr-2 border shadow-sm">${staff.id}</span>
                     <b class="text-sm text-slate-800">${staff.name}</b>
                 </div>
-                <div class="mt-2 text-[11px] text-slate-600 font-medium bg-slate-50 py-1 rounded-md">อัปเดต: ${new Date(logData.timestamp).toLocaleTimeString()}</div>
+                <div class="mt-2 text-[11px] text-slate-600 font-medium bg-slate-50 py-1 rounded-md">อัปเดต: ${new Date(logData.timestamp).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</div>
                 ${deviceStatusHTML}
             </div>
         `);
@@ -315,7 +315,7 @@ function subscribeToGPSLogs() {
             }
 
             // Alert logic
-            const timeStr = new Date(newLog.timestamp).toLocaleTimeString();
+            const timeStr = new Date(newLog.timestamp).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit' });
             if (newLog.is_mock) {
                 addRealtimeAlert('mock', 'Fake GPS Detected', timeStr, staff.id);
             } else {
@@ -417,13 +417,13 @@ async function loadTableData() {
                 staffs ( name, id ),
                 customers ( name )
             `)
-            .order('visit_start', { ascending: false });
+            .order('time_in', { ascending: false });
 
         if (startDate) {
-            query = query.gte('visit_start', `${startDate}T00:00:00Z`);
+            query = query.gte('time_in', `${startDate}T00:00:00+07:00`);
         }
         if (endDate) {
-            query = query.lte('visit_start', `${endDate}T23:59:59Z`);
+            query = query.lte('time_in', `${endDate}T23:59:59+07:00`);
         }
 
         const { data: visits, error } = await query;
@@ -438,14 +438,15 @@ async function loadTableData() {
         visits.forEach(v => {
             const staffName = v.staffs ? `${v.staffs.name} (${v.staffs.id})` : 'ไม่ทราบสาย';
             const customerName = v.customers ? v.customers.name : 'Unknown';
-            const startTime = new Date(v.visit_start).toLocaleTimeString();
-            const endTime = v.visit_end ? new Date(v.visit_end).toLocaleTimeString() : 'กำลังเยี่ยม';
+            const timeOpts = { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' };
+            const startTime = new Date(v.time_in).toLocaleTimeString('th-TH', timeOpts);
+            const endTime = v.time_out ? new Date(v.time_out).toLocaleTimeString('th-TH', timeOpts) : 'กำลังเยี่ยม';
 
             // Format Duration
             let durationStr = '-';
-            if (v.duration_minutes) {
-                const h = Math.floor(v.duration_minutes / 60);
-                const m = Math.floor(v.duration_minutes % 60);
+            if (v.duration_mins) {
+                const h = Math.floor(v.duration_mins / 60);
+                const m = Math.floor(v.duration_mins % 60);
                 durationStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
             }
 
