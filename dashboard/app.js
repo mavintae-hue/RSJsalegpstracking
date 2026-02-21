@@ -1,6 +1,6 @@
 // Initialize Supabase Client (REPLACE WITH REAL KEYS)
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://uwjkhwourxvjgosrwgxx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PIeG5dutR75P4xnAVY_59g_J4cvJZOL';
 let supabaseClient;
 
 // Map Global Variables
