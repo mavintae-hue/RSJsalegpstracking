@@ -33,10 +33,11 @@ Deno.serve(async (req) => {
     const currentSpeed = speed ? parseFloat(speed) : null
     const is_mock = mock === 'true' || mock === '1'
 
-    // Create a Supabase client with the Service Role key to securely insert data
+    // Use the built-in Supabase service role key if available, else anon
+    // This requires setting the secret in the Supabase Dashboard
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_URL') ?? 'https://uwjkhwourxvjgosrwgxx.supabase.co',
+      Deno.env.get('SUPABASESERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     )
 
     // Insert into Supabase gps_logs
@@ -55,10 +56,10 @@ Deno.serve(async (req) => {
       ])
 
     if (error) {
-      console.error("Error inserting GPS log to Supabase:", error)
+      console.error("Supabase Insert Error Object:", JSON.stringify(error, null, 2))
       return new Response(
-        "Database Error",
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } }
+        JSON.stringify({ error: "Database Error", details: error }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -67,10 +68,11 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'text/plain' } },
     )
   } catch (error) {
-    console.error("API Error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error("API Exception Error:", errorMessage)
     return new Response(
-      "Server Error",
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } }
+      JSON.stringify({ error: "Server Error", details: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

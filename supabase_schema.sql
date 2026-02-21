@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.staffs (
 
 -- 2. Table: customers
 CREATE TABLE IF NOT EXISTS public.customers (
-    id DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     name TEXT NOT NULL,
     lat DOUBLE PRECISION,
     lng DOUBLE PRECISION,
@@ -23,7 +23,7 @@ CREATE INDEX IF NOT EXISTS customers_geom_idx ON public.customers USING GIST (ge
 
 -- 3. Table: gps_logs
 CREATE TABLE IF NOT EXISTS public.gps_logs (
-    id DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     staff_id TEXT REFERENCES public.staffs(id) ON DELETE CASCADE,
     lat DOUBLE PRECISION,
     lng DOUBLE PRECISION,
@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS gps_logs_staff_time_idx ON public.gps_logs(staff_id, 
 
 -- 4. Table: visits
 CREATE TABLE IF NOT EXISTS public.visits (
-    id DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     staff_id TEXT REFERENCES public.staffs(id) ON DELETE CASCADE,
     customer_id UUID REFERENCES public.customers(id) ON DELETE CASCADE,
     time_in TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS public.visits (
 
 -- 5. Table: territories
 CREATE TABLE IF NOT EXISTS public.territories (
-    id DEFAULT uuid_generate_v4() PRIMARY KEY,
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     name TEXT NOT NULL,
     geom geometry(Polygon, 4326)
 );
