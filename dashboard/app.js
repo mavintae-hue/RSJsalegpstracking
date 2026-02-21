@@ -96,7 +96,9 @@ async function loadCustomers() {
 }
 
 function setDefaultDates() {
-    const today = new Date().toISOString().split('T')[0];
+    // Force date to be computed in Thailand timezone (Asia/Bangkok)
+    const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const today = new Date().toLocaleString('sv-SE', options).split(' ')[0]; // Returns YYYY-MM-DD
     const historyDateInput = document.getElementById('history-date');
     const reportStartDateInput = document.getElementById('report-start-date');
     const reportEndDateInput = document.getElementById('report-end-date');
