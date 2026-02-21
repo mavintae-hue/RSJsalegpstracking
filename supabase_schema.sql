@@ -72,6 +72,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_set_customer_geom ON public.customers;
 CREATE TRIGGER trigger_set_customer_geom
 BEFORE INSERT OR UPDATE ON public.customers
 FOR EACH ROW
