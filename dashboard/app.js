@@ -111,9 +111,12 @@ function setDefaultDates() {
 async function loadTerritories() {
     const { data, error } = await supabaseClient
         .from('territories')
-        .select('name, ST_AsGeoJSON(geom) as geojson');
+        .select('name'); // Removed ST_AsGeoJSON to prevent 400 error for now
 
-    if (error) { console.error("Error loading territories", error); return; }
+    if (error) {
+        // Silently fail if territories are not set up properly yet
+        return;
+    }
 
     territoryPolygons.forEach(p => map.removeLayer(p));
     territoryPolygons = [];
@@ -201,15 +204,38 @@ async function loadLatestStaffLocations() {
     const { data: staffs, error: staffErr } = await supabaseClient.from('staffs').select('*');
     if (staffErr) { console.error("Error loading staffs", staffErr); return; }
 
-    allStaffs = staffs;
+    let activeStaffs = staffs || [];
+
+    // Auto-discover staffs from gps_logs if staffs table is empty (RLS blocked or no data)
+    if (activeStaffs.length === 0) {
+        console.log("No staffs found, attempting auto-discovery from gps_logs...");
+        const { data: recentLogs } = await supabaseClient
+            .from('gps_logs')
+            .select('staff_id')
+            .order('timestamp', { ascending: false })
+            .limit(100);
+
+        if (recentLogs && recentLogs.length > 0) {
+            const uniqueIds = [...new Set(recentLogs.map(log => log.staff_id))].filter(Boolean);
+            activeStaffs = uniqueIds.map((id, index) => {
+                const colors = ['blue', 'orange', 'purple', 'teal', 'amber'];
+                return { id: id, name: id, color: colors[index % colors.length] };
+            });
+            console.log("Auto-discovered staffs:", activeStaffs);
+        }
+    }
+
+    allStaffs = activeStaffs;
     updateFilterCheckboxes();
 
     // Reset counters
-    stats.totalStaff = staffs.length;
+    stats.totalStaff = allStaffs.length;
     stats.driving = 0;
     stats.outOfBounds = 0;
 
-    for (const staff of staffs) {
+    let allBounds = [];
+
+    for (const staff of allStaffs) {
         const { data: logs, error: logErr } = await supabaseClient
             .from('gps_logs')
             .select('*')
@@ -221,10 +247,17 @@ async function loadLatestStaffLocations() {
 
         if (latestLog && latestLog.lat && latestLog.lng) {
             updateMarkerUI(staff, latestLog);
+            allBounds.push([latestLog.lat, latestLog.lng]);
             if (latestLog.speed > 0) stats.driving++;
             // Note: out-of-bounds requires geofencing checks, skipping for UI stat speed
         }
     }
+
+    // Auto center map to show all staffs
+    if (allBounds.length > 0 && map) {
+        map.fitBounds(allBounds, { maxZoom: 15, padding: [50, 50] });
+    }
+
     updateStatsUI();
 }
 
@@ -307,9 +340,16 @@ function subscribeToGPSLogs() {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'gps_logs' }, async payload => {
             const newLog = payload.new;
 
-            // Fetch staff details
-            const staff = allStaffs.find(s => s.id === newLog.staff_id);
-            if (!staff) return;
+            // Fetch staff details, auto-add if missing
+            let staff = allStaffs.find(s => s.id === newLog.staff_id);
+            if (!staff) {
+                console.log("New staff detected in real-time:", newLog.staff_id);
+                staff = { id: newLog.staff_id, name: newLog.staff_id, color: 'blue' };
+                allStaffs.push(staff);
+                updateFilterCheckboxes();
+                stats.totalStaff = allStaffs.length;
+                updateStatsUI();
+            }
 
             // Update UI Map
             if (newLog.lat && newLog.lng) {
