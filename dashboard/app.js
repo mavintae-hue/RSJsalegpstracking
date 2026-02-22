@@ -81,8 +81,16 @@ async function loadCustomers() {
             // Unvisited logic for simplicity (can fetch visits table to know real status later)
             const marker = L.circleMarker([cust.lat, cust.lng], {
                 radius: 5, fillColor: "#94a3b8", color: "#64748b", weight: 2, fillOpacity: 1
-            }).bindPopup(`<div class="font-prompt text-center"><b class="text-sm text-slate-600">${cust.name}</b></div>`)
-                .addTo(map);
+            }).bindPopup(`
+                <div class="font-prompt text-center min-w-[150px]">
+                    <div class="flex items-center justify-center mb-1">
+                        ${cust.staff_id ? `<span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold mr-1 border whitespace-nowrap">${cust.staff_id}</span>` : ''}
+                        <b class="text-sm text-slate-800 leading-tight">${cust.name}</b>
+                    </div>
+                    ${cust.customer_type ? `<div class="text-[10px] text-slate-500 font-medium">${cust.customer_type}</div>` : ''}
+                    ${cust.district ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="ph-fill ph-map-pin mr-1"></i>อ.${cust.district}</div>` : ''}
+                </div>
+            `).addTo(map);
 
             // 40m geofence visual
             L.circle([cust.lat, cust.lng], {
@@ -408,9 +416,12 @@ async function processExcelUpload() {
         if (!supabaseClient) throw new Error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
 
         const payload = excelDataToUpload.map(row => ({
-            name: row.name || row.Name || row['ชื่อร้าน'],
+            name: row.name || row.Name || row['ลูกค้า'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'],
             lat: parseFloat(row.lat || row.Lat || row.Latitude || row['ละติจูด']),
             lng: parseFloat(row.lng || row.Lng || row.Lon || row.Longitude || row['ลองจิจูด']),
+            staff_id: row.staff_id || row['สายวิ่ง'] || null,
+            customer_type: row.customer_type || row['ชื่อประเภทย่อยของลูกค้า'] || null,
+            district: row.district || row['อำเภอทางภูมิศ'] || null
         })).filter(r => r.name && r.lat && r.lng);
 
         if (payload.length === 0) throw new Error("ฟอร์แมตข้อมูลผิดพลาด");
@@ -457,7 +468,7 @@ async function loadTableData() {
             .select(`
                 *,
                 staffs ( name, id ),
-                customers ( name )
+                customers ( name, customer_type, district, staff_id )
             `)
             .order('time_in', { ascending: false });
 
@@ -478,8 +489,16 @@ async function loadTableData() {
         }
 
         visits.forEach(v => {
-            const staffName = v.staffs ? `${v.staffs.name} (${v.staffs.id})` : 'ไม่ทราบสาย';
-            const customerName = v.customers ? v.customers.name : 'Unknown';
+            // Prefer staff from the customer assignment if available, fallback to the one in visits table
+            const staffIdDisplay = v.customers?.staff_id || v.staff_id;
+            const staffName = v.staffs ? `${v.staffs.name} (${staffIdDisplay})` : `<span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold">${staffIdDisplay}</span>`;
+
+            const customerNameHtml = v.customers ? `
+                <div class="leading-tight">
+                    <div class="font-bold text-slate-700 text-[13px]">${v.customers.name}</div>
+                    ${v.customers.customer_type ? `<div class="text-[10px] text-slate-500 mt-0.5">${v.customers.customer_type}</div>` : ''}
+                </div>
+            ` : '<span class="text-slate-400">Unknown</span>';
             const timeOpts = { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' };
             const startTime = new Date(v.time_in).toLocaleTimeString('th-TH', timeOpts);
             const endTime = v.time_out ? new Date(v.time_out).toLocaleTimeString('th-TH', timeOpts) : 'กำลังเยี่ยม';
@@ -498,8 +517,8 @@ async function loadTableData() {
 
             tbody.innerHTML += `
                 <tr class="interactive-row">
-                    <td class="p-3 font-medium text-slate-700">${staffName}</td>
-                    <td class="p-3">${customerName}</td>
+                    <td class="p-3 text-center sm:text-left">${staffName}</td>
+                    <td class="p-3">${customerNameHtml}</td>
                     <td class="p-3 text-center text-blue-600 font-medium">${startTime} - ${endTime}</td>
                     <td class="p-3 text-center text-slate-600">${durationStr}</td>
                     <td class="p-3 text-center">${typeBadge}</td>
