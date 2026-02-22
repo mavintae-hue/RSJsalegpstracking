@@ -7,6 +7,7 @@ let supabaseClient;
 let map;
 let staffMapLayers = {};
 let customerMarkers = [];
+let plottedCustomerIds = new Set();
 let territoryPolygons = [];
 let allStaffs = [];
 
@@ -61,6 +62,7 @@ function initMap() {
 
     // Automatically load the table data for today on startup
     loadTableData();
+    calculateTodayDistance();
 }
 
 // ----------------------------------------------------
@@ -68,39 +70,15 @@ function initMap() {
 // ----------------------------------------------------
 
 async function loadCustomers() {
-    const { data, error } = await supabaseClient.from('customers').select('*');
+    // Only fetch the count, do not draw 1000+ markers to avoid clutter
+    const { count, error } = await supabaseClient
+        .from('customers')
+        .select('*', { count: 'exact', head: true });
+
     if (error) { console.error("Error loading customers", error); return; }
 
-    customerMarkers.forEach(m => map.removeLayer(m));
-    customerMarkers = [];
-    stats.totalStores = data.length;
+    stats.totalStores = count || 0;
     updateStatsUI();
-
-    data.forEach(cust => {
-        if (cust.lat && cust.lng) {
-            // Unvisited logic for simplicity (can fetch visits table to know real status later)
-            const marker = L.circleMarker([cust.lat, cust.lng], {
-                radius: 5, fillColor: "#94a3b8", color: "#64748b", weight: 2, fillOpacity: 1
-            }).bindPopup(`
-                <div class="font-prompt text-center min-w-[150px]">
-                    <div class="flex items-center justify-center mb-1">
-                        ${cust.staff_id ? `<span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold mr-1 border whitespace-nowrap">${cust.staff_id}</span>` : ''}
-                        <b class="text-sm text-slate-800 leading-tight">${cust.name}</b>
-                    </div>
-                    ${cust.customer_type ? `<div class="text-[10px] text-slate-500 font-medium">${cust.customer_type}</div>` : ''}
-                    ${cust.district ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="ph-fill ph-map-pin mr-1"></i>อ.${cust.district}</div>` : ''}
-                </div>
-            `).addTo(map);
-
-            // 40m geofence visual
-            L.circle([cust.lat, cust.lng], {
-                radius: 40,
-                color: '#cbd5e1', fillColor: '#f1f5f9', fillOpacity: 0.2, weight: 1.5
-            }).addTo(map);
-
-            customerMarkers.push(marker);
-        }
-    });
 }
 
 function setDefaultDates() {
@@ -371,6 +349,8 @@ function subscribeToGPSLogs() {
             } else {
                 addRealtimeAlert('update', `ส่งพิกัด ความเร็ว ${newLog.speed || 0} km/h`, timeStr, staff.id);
             }
+
+            calculateTodayDistance(); // Update distance KPI
         })
         .subscribe();
 }
@@ -468,7 +448,7 @@ async function loadTableData() {
             .select(`
                 *,
                 staffs ( name, id ),
-                customers ( name, customer_type, district, staff_id )
+                customers ( name, customer_type, district, staff_id, lat, lng )
             `)
             .order('time_in', { ascending: false });
 
@@ -483,6 +463,12 @@ async function loadTableData() {
         if (error) throw error;
 
         tbody.innerHTML = '';
+
+        // Clear previously drawn dynamic customers
+        customerMarkers.forEach(m => map.removeLayer(m));
+        customerMarkers = [];
+        plottedCustomerIds.clear();
+
         if (visits.length === 0) {
             tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-500">ไม่พบข้อมูลในช่วงเวลาที่เลือก</td></tr>`;
             return;
@@ -526,6 +512,36 @@ async function loadTableData() {
                     <td class="p-3 text-center"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">Online</span></td>
                 </tr>
             `;
+
+            // Dynamically draw customer on map if not already plotted
+            if (v.customers && v.customers.lat && v.customers.lng) {
+                const cust = v.customers;
+                const custKey = `${cust.lat},${cust.lng}`;
+                if (!plottedCustomerIds.has(custKey)) {
+                    plottedCustomerIds.add(custKey);
+
+                    const marker = L.circleMarker([cust.lat, cust.lng], {
+                        radius: 6, fillColor: "#10b981", color: "#047857", weight: 2, fillOpacity: 1 // Green means visited
+                    }).bindPopup(`
+                        <div class="font-prompt text-center min-w-[150px]">
+                            <div class="flex items-center justify-center mb-1">
+                                ${cust.staff_id ? `<span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold mr-1 border whitespace-nowrap">${cust.staff_id}</span>` : ''}
+                                <b class="text-sm text-slate-800 leading-tight">${cust.name}</b>
+                            </div>
+                            ${cust.customer_type ? `<div class="text-[10px] text-slate-500 font-medium">${cust.customer_type}</div>` : ''}
+                            <div class="text-[10px] text-emerald-600 mt-1 font-bold whitespace-nowrap"><i class="ph-bold ph-check-circle mr-1"></i>เข้าเยี่ยมแล้ว</div>
+                        </div>
+                    `).addTo(map);
+
+                    const geofence = L.circle([cust.lat, cust.lng], {
+                        radius: 40,
+                        color: '#34d399', fillColor: '#a7f3d0', fillOpacity: 0.15, weight: 1.5
+                    }).addTo(map);
+
+                    customerMarkers.push(marker);
+                    customerMarkers.push(geofence);
+                }
+            }
         });
 
     } catch (err) {
