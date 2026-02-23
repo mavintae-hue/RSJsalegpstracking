@@ -465,7 +465,12 @@ async function calculateTodayDistance() {
         .lte('timestamp', `${today}T23:59:59+07:00`)
         .order('timestamp', { ascending: true });
 
-    if (error || !logs || logs.length < 2) return;
+    if (error || !logs) return;
+    if (logs.length < 2) {
+        const el = document.getElementById('stat-distance-today');
+        if (el) el.textContent = '0';
+        return;
+    }
 
     // Group by staff and sum Haversine distances
     const distByStaff = {};
@@ -483,8 +488,8 @@ async function calculateTodayDistance() {
     const totalKm = Object.values(distByStaff).reduce((sum, d) => sum + d.total, 0);
 
     // Update the UI stat element
-    const el = document.getElementById('stat-distance');
-    if (el) el.innerHTML = `${totalKm.toFixed(1)} <span class="text-[10px] font-normal text-slate-400">กม.</span>`;
+    const el = document.getElementById('stat-distance-today');
+    if (el) el.textContent = totalKm.toFixed(1);
 }
 
 function subscribeToGPSLogs() {
