@@ -561,35 +561,61 @@ async function processExcelUpload() {
     try {
         if (!supabaseClient) throw new Error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
 
-        const rawPayload = excelDataToUpload.map(row => ({
-            name: row.name || row.Name || row['ชื่อ'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'],
-            customer_code: row.customer_code || row['ลูกค้า'] || null,
-            lat: parseFloat(row.lat || row.Lat || row.Latitude || row['ละติจูด']),
-            lng: parseFloat(row.lng || row.Lng || row.Lon || row.Longitude || row['ลองจิจูด']),
-            staff_id: row.staff_id || row['สายวิ่ง'] || null,
-            customer_type: row.customer_type || row['ชื่อประเภทย่อยของลูกค้า'] || null,
-            district: row.district || row['อำเภอทางภูมิศ'] || null
-        })).filter(r => r.name && r.lat && r.lng);
+        // Debug: log the first row's keys so we can see exact column names
+        if (excelDataToUpload.length > 0) {
+            console.log('📋 Excel columns detected:', Object.keys(excelDataToUpload[0]));
+            console.log('📋 First row sample:', excelDataToUpload[0]);
+        }
+
+        const rawPayload = excelDataToUpload.map(row => {
+            const name = row.name || row.Name || row['ชื่อ'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'] || null;
+            const lat = parseFloat(row.lat ?? row.Lat ?? row.Latitude ?? row['ละติจูด']);
+            const lng = parseFloat(row.lng ?? row.Lng ?? row.Lon ?? row.Longitude ?? row['ลองจิจูด']);
+            return {
+                name,
+                customer_code: row.customer_code || row['ลูกค้า'] || null,
+                lat, lng,
+                staff_id: row.staff_id || row['สายวิ่ง'] || null,
+                customer_type: row.customer_type || row['ชื่อประเภทย่อยของลูกค้า'] || null,
+                district: row.district || row['อำเภอทางภูมิศ'] || null
+            };
+        });
+
+        const validRows = rawPayload.filter(r => r.name && !isNaN(r.lat) && !isNaN(r.lng));
+        const skipped = rawPayload.length - validRows.length;
+
+        if (skipped > 0) {
+            console.warn(`⚠️ Skipped ${skipped} rows (missing name or coordinates)`);
+        }
 
         // Deduplicate by name — last row with same name wins
         const dedupMap = new Map();
-        rawPayload.forEach(r => dedupMap.set(r.name, r));
+        validRows.forEach(r => dedupMap.set(r.name, r));
         const payload = [...dedupMap.values()];
 
-        if (payload.length === 0) throw new Error("ฟอร์แมตข้อมูลผิดพลาด");
+        if (payload.length === 0) throw new Error("ไม่พบข้อมูลที่ถูกต้อง — ตรวจสอบชื่อคอลัมน์ใน Excel ให้ตรงกับที่ระบบกำหนด");
 
-        const { error } = await supabaseClient.from('customers').upsert(payload, { onConflict: 'name' });
-        if (error) throw error;
+        // Upload in batches of 500 to handle large files
+        const BATCH = 500;
+        let uploaded = 0;
+        for (let i = 0; i < payload.length; i += BATCH) {
+            const chunk = payload.slice(i, i + BATCH);
+            statusEl.innerText = `กำลังอัปโหลด... ${Math.min(i + BATCH, payload.length)} / ${payload.length} รายการ`;
+            const { error } = await supabaseClient.from('customers').upsert(chunk, { onConflict: 'name' });
+            if (error) throw error;
+            uploaded += chunk.length;
+        }
 
+        const skipNote = skipped > 0 ? ` (ข้ามไป ${skipped} แถว ที่ไม่มีพิกัด)` : '';
         statusEl.className = 'mt-3 text-sm text-center font-medium text-emerald-600';
-        statusEl.innerText = `อัปโหลดสำเร็จ ${payload.length} รายการ!`;
+        statusEl.innerText = `อัปโหลดสำเร็จ ${uploaded} รายการ!${skipNote}`;
 
         loadCustomers();
 
         setTimeout(() => {
             toggleUploadModal();
             statusEl.classList.add('hidden');
-        }, 2000);
+        }, 3000);
 
     } catch (error) {
         console.error("Upload error:", error);
