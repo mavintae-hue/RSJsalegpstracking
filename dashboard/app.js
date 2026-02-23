@@ -561,7 +561,7 @@ async function processExcelUpload() {
     try {
         if (!supabaseClient) throw new Error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
 
-        const payload = excelDataToUpload.map(row => ({
+        const rawPayload = excelDataToUpload.map(row => ({
             name: row.name || row.Name || row['ชื่อ'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'],
             customer_code: row.customer_code || row['ลูกค้า'] || null,
             lat: parseFloat(row.lat || row.Lat || row.Latitude || row['ละติจูด']),
@@ -570,6 +570,11 @@ async function processExcelUpload() {
             customer_type: row.customer_type || row['ชื่อประเภทย่อยของลูกค้า'] || null,
             district: row.district || row['อำเภอทางภูมิศ'] || null
         })).filter(r => r.name && r.lat && r.lng);
+
+        // Deduplicate by name — last row with same name wins
+        const dedupMap = new Map();
+        rawPayload.forEach(r => dedupMap.set(r.name, r));
+        const payload = [...dedupMap.values()];
 
         if (payload.length === 0) throw new Error("ฟอร์แมตข้อมูลผิดพลาด");
 
