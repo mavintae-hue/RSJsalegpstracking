@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.staffs (
 CREATE TABLE IF NOT EXISTS public.customers (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     name TEXT NOT NULL,
+    staff_id TEXT REFERENCES public.staffs(id) ON DELETE SET NULL, -- Tie store to a specific staff
     lat DOUBLE PRECISION,
     lng DOUBLE PRECISION,
     geom geometry(Point, 4326)

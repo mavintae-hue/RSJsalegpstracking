@@ -70,14 +70,22 @@ function initMap() {
 // ----------------------------------------------------
 
 async function loadCustomers() {
-    // Only fetch the count, do not draw 1000+ markers to avoid clutter
-    const { count, error } = await supabaseClient
-        .from('customers')
-        .select('*', { count: 'exact', head: true });
+    // 1) Fetch total stores for today's visits instead of counting generic stores
+    const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const today = new Date().toLocaleString('sv-SE', options).split(' ')[0]; // Returns YYYY-MM-DD
 
-    if (error) { console.error("Error loading customers", error); return; }
+    // Using a select with count to get today's visits
+    const { data: visitsToday, error } = await supabaseClient
+        .from('visits')
+        .select('customer_id')
+        .gte('time_in', `${today}T00:00:00+07:00`)
+        .lte('time_in', `${today}T23:59:59+07:00`);
 
-    stats.totalStores = count || 0;
+    if (error) { console.error("Error loading today's visits", error); return; }
+
+    // Count unique customers visited today
+    const uniqueStoreIds = new Set(visitsToday.map(v => v.customer_id));
+    stats.totalStores = uniqueStoreIds.size;
     updateStatsUI();
 }
 
@@ -319,6 +327,94 @@ function addRealtimeAlert(type, message, time, staffId) {
     if (container.innerHTML.includes('กำลังเชื่อมต่อ')) container.innerHTML = '';
 
     container.insertAdjacentHTML('afterbegin', html);
+}
+
+// Path history layer storage
+let historyPathLayers = {};
+
+async function updatePathHistory() {
+    if (!supabaseClient) return;
+
+    const selectedDate = document.getElementById('history-date').value; // YYYY-MM-DD
+    const hoursBack = document.getElementById('path-history-select').value; // '1', '3', '6', 'all'
+
+    if (!selectedDate) return;
+
+    // Build the time range strictly within the selected date (Thai timezone)
+    const dayStart = `${selectedDate}T00:00:00+07:00`;
+    const dayEnd = `${selectedDate}T23:59:59+07:00`;
+
+    // If a specific hour window is chosen, calculate back from the end of the day (or now if today)
+    let rangeStart = dayStart;
+    if (hoursBack !== 'all') {
+        const hours = parseInt(hoursBack);
+        const optionsDate = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const todayStr = new Date().toLocaleString('sv-SE', optionsDate).split(' ')[0];
+
+        if (selectedDate === todayStr) {
+            // If today, go back from NOW
+            const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+            rangeStart = cutoff.toISOString();
+        } else {
+            // If a past day, go back from end of that day
+            const endOfDay = new Date(`${selectedDate}T23:59:59+07:00`);
+            const cutoff = new Date(endOfDay - hours * 60 * 60 * 1000);
+            rangeStart = cutoff.toISOString();
+        }
+    }
+
+    // Fetch all GPS logs within the time range, ordered by time
+    const { data: logs, error } = await supabaseClient
+        .from('gps_logs')
+        .select('staff_id, lat, lng, timestamp')
+        .gte('timestamp', rangeStart)
+        .lte('timestamp', dayEnd)
+        .order('timestamp', { ascending: true });
+
+    if (error) { console.error('Error loading history path:', error); return; }
+
+    // Remove existing history layers
+    Object.values(historyPathLayers).forEach(layer => {
+        if (map.hasLayer(layer)) map.removeLayer(layer);
+    });
+    historyPathLayers = {};
+
+    if (!logs || logs.length === 0) return;
+
+    // Group logs by staff_id
+    const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b'];
+    const staffGroups = {};
+    logs.forEach(log => {
+        if (!log.lat || !log.lng) return;
+        if (!staffGroups[log.staff_id]) staffGroups[log.staff_id] = [];
+        staffGroups[log.staff_id].push([log.lat, log.lng]);
+    });
+
+    // Draw a polyline for each staff
+    Object.entries(staffGroups).forEach(([staffId, coords], index) => {
+        if (coords.length < 2) return;
+        const color = staffColors[index % staffColors.length];
+        const polyline = L.polyline(coords, {
+            color: color,
+            weight: 3,
+            opacity: 0.75,
+            lineJoin: 'round'
+        }).addTo(map);
+
+        // Start dot (green) and end dot (red)
+        L.circleMarker(coords[0], { radius: 7, color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
+            .bindTooltip(`${staffId}: เริ่ม`, { permanent: false }).addTo(map);
+        L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 1, weight: 2 })
+            .bindTooltip(`${staffId}: ล่าสุด`, { permanent: false }).addTo(map);
+
+        historyPathLayers[staffId] = polyline;
+    });
+
+    // Fit map to the path bounds
+    const allCoords = Object.values(staffGroups).flat();
+    if (allCoords.length > 1) {
+        map.fitBounds(allCoords, { padding: [30, 30] });
+    }
 }
 
 function subscribeToGPSLogs() {
