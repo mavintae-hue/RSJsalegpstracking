@@ -169,7 +169,7 @@ function updateFilterCheckboxes() {
 
         const html = `
             <label class="cursor-pointer inline-flex items-center select-none hover:-translate-y-0.5 transition-transform">
-                <input type="checkbox" value="${staff.id}" class="route-filter filter-checkbox hidden" checked onchange="updateMapFiltersDB()">
+                <input type="checkbox" value="${staff.id}" class="route-filter filter-checkbox hidden" checked onchange="updateMapFiltersWithHistory()">
                 <span class="filter-label px-2 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-300 flex items-center shadow-sm">
                     <span class="w-2 h-2 rounded-full bg-${color.split('-')[0]}-600 mr-1"></span> ${staff.id}
                 </span>
@@ -329,8 +329,18 @@ function addRealtimeAlert(type, message, time, staffId) {
     container.insertAdjacentHTML('afterbegin', html);
 }
 
-// Path history layer storage
+// Path history layer storage - stores a LayerGroup per staffId
 let historyPathLayers = {};
+
+// Haversine formula for distance in km between two lat/lng pairs
+function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 async function updatePathHistory() {
     if (!supabaseClient) return;
@@ -344,26 +354,20 @@ async function updatePathHistory() {
     const dayStart = `${selectedDate}T00:00:00+07:00`;
     const dayEnd = `${selectedDate}T23:59:59+07:00`;
 
-    // If a specific hour window is chosen, calculate back from the end of the day (or now if today)
     let rangeStart = dayStart;
     if (hoursBack !== 'all') {
         const hours = parseInt(hoursBack);
         const optionsDate = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
         const todayStr = new Date().toLocaleString('sv-SE', optionsDate).split(' ')[0];
-
         if (selectedDate === todayStr) {
-            // If today, go back from NOW
-            const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
-            rangeStart = cutoff.toISOString();
+            rangeStart = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
         } else {
-            // If a past day, go back from end of that day
             const endOfDay = new Date(`${selectedDate}T23:59:59+07:00`);
-            const cutoff = new Date(endOfDay - hours * 60 * 60 * 1000);
-            rangeStart = cutoff.toISOString();
+            rangeStart = new Date(endOfDay - hours * 60 * 60 * 1000).toISOString();
         }
     }
 
-    // Fetch all GPS logs within the time range, ordered by time
+    // Fetch GPS logs within the date window
     const { data: logs, error } = await supabaseClient
         .from('gps_logs')
         .select('staff_id, lat, lng, timestamp')
@@ -381,8 +385,17 @@ async function updatePathHistory() {
 
     if (!logs || logs.length === 0) return;
 
-    // Group logs by staff_id
+    // Get which staff are currently checked in the filter panel
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    // Assign a deterministic color per staff (same order as allStaffs)
     const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b'];
+    const staffColorMap = {};
+    allStaffs.forEach((s, i) => { staffColorMap[s.id] = staffColors[i % staffColors.length]; });
+
+    // Group logs by staff_id
     const staffGroups = {};
     logs.forEach(log => {
         if (!log.lat || !log.lng) return;
@@ -390,31 +403,88 @@ async function updatePathHistory() {
         staffGroups[log.staff_id].push([log.lat, log.lng]);
     });
 
-    // Draw a polyline for each staff
-    Object.entries(staffGroups).forEach(([staffId, coords], index) => {
+    // Draw dashed polyline + start/end markers per staff
+    Object.entries(staffGroups).forEach(([staffId, coords]) => {
         if (coords.length < 2) return;
-        const color = staffColors[index % staffColors.length];
-        const polyline = L.polyline(coords, {
+
+        const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
+        const color = staffColorMap[staffId] || '#64748b';
+
+        const group = L.layerGroup();
+
+        L.polyline(coords, {
             color: color,
             weight: 3,
-            opacity: 0.75,
+            opacity: 0.80,
+            dashArray: '8, 6',   // dashed line
             lineJoin: 'round'
-        }).addTo(map);
+        }).addTo(group);
 
-        // Start dot (green) and end dot (red)
+        // Start dot (green) and end dot (red) — tooltip shows staff id
         L.circleMarker(coords[0], { radius: 7, color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
-            .bindTooltip(`${staffId}: เริ่ม`, { permanent: false }).addTo(map);
+            .bindTooltip(`${staffId}: เริ่ม`, { permanent: false }).addTo(group);
         L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 1, weight: 2 })
-            .bindTooltip(`${staffId}: ล่าสุด`, { permanent: false }).addTo(map);
+            .bindTooltip(`${staffId}: ล่าสุด`, { permanent: false }).addTo(group);
 
-        historyPathLayers[staffId] = polyline;
+        if (isVisible) group.addTo(map);
+        historyPathLayers[staffId] = group;
     });
 
-    // Fit map to the path bounds
-    const allCoords = Object.values(staffGroups).flat();
-    if (allCoords.length > 1) {
-        map.fitBounds(allCoords, { padding: [30, 30] });
-    }
+    // Fit map to visible paths
+    const visibleCoords = Object.entries(staffGroups)
+        .filter(([id]) => checkedStaffIds.size === 0 || checkedStaffIds.has(id))
+        .flatMap(([, coords]) => coords);
+    if (visibleCoords.length > 1) map.fitBounds(visibleCoords, { padding: [30, 30] });
+}
+
+// When staff filter checkbox changes, also toggle history path visibility
+function updateMapFiltersWithHistory() {
+    updateMapFiltersDB();
+
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    Object.entries(historyPathLayers).forEach(([staffId, group]) => {
+        const shouldShow = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
+        if (shouldShow && !map.hasLayer(group)) group.addTo(map);
+        if (!shouldShow && map.hasLayer(group)) map.removeLayer(group);
+    });
+}
+
+async function calculateTodayDistance() {
+    if (!supabaseClient) return;
+
+    const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const today = new Date().toLocaleString('sv-SE', options).split(' ')[0];
+
+    const { data: logs, error } = await supabaseClient
+        .from('gps_logs')
+        .select('staff_id, lat, lng, timestamp')
+        .gte('timestamp', `${today}T00:00:00+07:00`)
+        .lte('timestamp', `${today}T23:59:59+07:00`)
+        .order('timestamp', { ascending: true });
+
+    if (error || !logs || logs.length < 2) return;
+
+    // Group by staff and sum Haversine distances
+    const distByStaff = {};
+    logs.forEach(log => {
+        if (!log.lat || !log.lng) return;
+        if (!distByStaff[log.staff_id]) distByStaff[log.staff_id] = { prev: null, total: 0 };
+        const entry = distByStaff[log.staff_id];
+        if (entry.prev) {
+            entry.total += haversineKm(entry.prev[0], entry.prev[1], log.lat, log.lng);
+        }
+        entry.prev = [log.lat, log.lng];
+    });
+
+    // Sum all staff distances for a fleet total
+    const totalKm = Object.values(distByStaff).reduce((sum, d) => sum + d.total, 0);
+
+    // Update the UI stat element
+    const el = document.getElementById('stat-distance');
+    if (el) el.innerHTML = `${totalKm.toFixed(1)} <span class="text-[10px] font-normal text-slate-400">กม.</span>`;
 }
 
 function subscribeToGPSLogs() {
