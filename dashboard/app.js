@@ -562,7 +562,8 @@ async function processExcelUpload() {
         if (!supabaseClient) throw new Error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
 
         const payload = excelDataToUpload.map(row => ({
-            name: row.name || row.Name || row['ลูกค้า'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'],
+            name: row.name || row.Name || row['ชื่อ'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'],
+            customer_code: row.customer_code || row['ลูกค้า'] || null,
             lat: parseFloat(row.lat || row.Lat || row.Latitude || row['ละติจูด']),
             lng: parseFloat(row.lng || row.Lng || row.Lon || row.Longitude || row['ลองจิจูด']),
             staff_id: row.staff_id || row['สายวิ่ง'] || null,
@@ -614,7 +615,7 @@ async function loadTableData() {
             .select(`
                 *,
                 staffs ( name, id ),
-                customers ( name, customer_type, district, staff_id, lat, lng )
+                customers ( name, customer_code, customer_type, district, staff_id, lat, lng )
             `)
             .order('time_in', { ascending: false });
 
@@ -641,14 +642,23 @@ async function loadTableData() {
         }
 
         visits.forEach(v => {
-            // Prefer staff from the customer assignment if available, fallback to the one in visits table
-            const staffIdDisplay = v.customers?.staff_id || v.staff_id;
-            const staffName = v.staffs ? `${v.staffs.name} (${staffIdDisplay})` : `<span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-bold">${staffIdDisplay}</span>`;
+            // Staff display: show route code (staff_id) as primary + name underneath
+            const staffIdDisplay = v.staff_id;
+            const routeName = v.staffs?.name || '';
+            const staffName = `
+                <div class="leading-tight">
+                    <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[11px] font-bold border border-blue-200">${staffIdDisplay}</span>
+                    ${routeName ? `<div class="text-[10px] text-slate-500 mt-0.5">${routeName}</div>` : ''}
+                </div>`;
 
+            // Store display: name (bold) + customer_code (badge) + type (small)
             const customerNameHtml = v.customers ? `
                 <div class="leading-tight">
                     <div class="font-bold text-slate-700 text-[13px]">${v.customers.name}</div>
-                    ${v.customers.customer_type ? `<div class="text-[10px] text-slate-500 mt-0.5">${v.customers.customer_type}</div>` : ''}
+                    <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+                        ${v.customers.customer_code ? `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono border">${v.customers.customer_code}</span>` : ''}
+                        ${v.customers.customer_type ? `<span class="text-[10px] text-slate-400">${v.customers.customer_type}</span>` : ''}
+                    </div>
                 </div>
             ` : '<span class="text-slate-400">Unknown</span>';
             const timeOpts = { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' };
