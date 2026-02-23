@@ -588,9 +588,13 @@ async function processExcelUpload() {
             console.warn(`⚠️ Skipped ${skipped} rows (missing name or coordinates)`);
         }
 
-        // Deduplicate by name — last row with same name wins
+        // Deduplicate by customer_code (unique store ID) — stores with same name but different codes are kept separate
+        // If no customer_code, fall back to dedup by name
         const dedupMap = new Map();
-        validRows.forEach(r => dedupMap.set(r.name, r));
+        validRows.forEach(r => {
+            const key = r.customer_code || r.name;
+            dedupMap.set(key, r);
+        });
         const payload = [...dedupMap.values()];
 
         if (payload.length === 0) throw new Error("ไม่พบข้อมูลที่ถูกต้อง — ตรวจสอบชื่อคอลัมน์ใน Excel ให้ตรงกับที่ระบบกำหนด");
@@ -601,7 +605,7 @@ async function processExcelUpload() {
         for (let i = 0; i < payload.length; i += BATCH) {
             const chunk = payload.slice(i, i + BATCH);
             statusEl.innerText = `กำลังอัปโหลด... ${Math.min(i + BATCH, payload.length)} / ${payload.length} รายการ`;
-            const { error } = await supabaseClient.from('customers').upsert(chunk, { onConflict: 'name' });
+            const { error } = await supabaseClient.from('customers').upsert(chunk, { onConflict: 'customer_code' });
             if (error) throw error;
             uploaded += chunk.length;
         }
