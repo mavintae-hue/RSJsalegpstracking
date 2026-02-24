@@ -398,6 +398,10 @@
                     </div>
 
                     <div class="flex gap-2 w-full sm:w-auto">
+                        <select id="visit-staff-filter" onchange="loadTableData()"
+                            class="flex-1 sm:flex-none bg-white border border-slate-200 text-slate-600 px-3 py-2 sm:py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm">
+                            <option value="">🚗 ทุกสายวิ่ง</option>
+                        </select>
                         <button onclick="loadTableData()"
                             class="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 sm:py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center">
                             <i class="ph-bold ph-funnel mr-1.5"></i> กรอง

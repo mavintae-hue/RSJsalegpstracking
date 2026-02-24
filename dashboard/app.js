@@ -56,11 +56,8 @@ function initMap() {
 
     setDefaultDates();
     loadCustomers();
-    loadTerritories();
     loadLatestStaffLocations();
     subscribeToGPSLogs();
-
-    // Automatically load the table data for today on startup
     loadTableData();
     calculateTodayDistance();
 }
@@ -69,24 +66,92 @@ function initMap() {
 // 2. DATA LOADING (REAL SUPABASE)
 // ----------------------------------------------------
 
-async function loadCustomers() {
-    // 1) Fetch total stores for today's visits instead of counting generic stores
-    const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const today = new Date().toLocaleString('sv-SE', options).split(' ')[0]; // Returns YYYY-MM-DD
+// Per-staff daily distance cache: { staffId: kmTotal }
+let dailyKmByStaff = {};
 
-    // Using a select with count to get today's visits
-    const { data: visitsToday, error } = await supabaseClient
-        .from('visits')
-        .select('customer_id')
+async function loadCustomers() {
+    if (!supabaseClient) return;
+
+    // Count today's unique visited stores for the stat card
+    const today = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).split(' ')[0];
+    const { data: visitsToday } = await supabaseClient
+        .from('visits').select('customer_id')
         .gte('time_in', `${today}T00:00:00+07:00`)
         .lte('time_in', `${today}T23:59:59+07:00`);
-
-    if (error) { console.error("Error loading today's visits", error); return; }
-
-    // Count unique customers visited today
-    const uniqueStoreIds = new Set(visitsToday.map(v => v.customer_id));
-    stats.totalStores = uniqueStoreIds.size;
+    stats.totalStores = new Set((visitsToday || []).map(v => v.customer_id)).size;
     updateStatsUI();
+
+    // Load ALL stores and plot on map
+    const { data: customers, error } = await supabaseClient
+        .from('customers')
+        .select('id, name, customer_code, customer_type, staff_id, lat, lng')
+        .not('lat', 'is', null).not('lng', 'is', null);
+
+    if (error || !customers) { console.error('loadCustomers error', error); return; }
+
+    // Remove previously plotted customer markers
+    customerMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+    customerMarkers = [];
+
+    // Remove old territory polygons
+    territoryPolygons.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
+    territoryPolygons = [];
+
+    const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#10b981', '#6366f1'];
+    const staffColorMap = {};
+    const storesByStaff = {};
+
+    customers.forEach(cust => {
+        if (!cust.lat || !cust.lng || isNaN(cust.lat) || isNaN(cust.lng)) return;
+
+        const sid = cust.staff_id || '_none';
+        if (!staffColorMap[sid]) {
+            const idx = Object.keys(staffColorMap).length;
+            staffColorMap[sid] = staffColors[idx % staffColors.length];
+        }
+        const color = staffColorMap[sid];
+
+        // Plot small circle marker
+        const marker = L.circleMarker([cust.lat, cust.lng], {
+            radius: 4, fillColor: color, color: '#fff',
+            weight: 1.5, fillOpacity: 0.85
+        }).bindPopup(`
+            <div class="font-prompt min-w-[160px]">
+                <div class="flex items-center gap-1 mb-1">
+                    ${cust.staff_id ? `<span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold border">${cust.staff_id}</span>` : ''}
+                    <b class="text-[13px] text-slate-800 leading-tight">${cust.name}</b>
+                </div>
+                ${cust.customer_code ? `<div class="text-[10px] text-slate-500 font-mono">${cust.customer_code}</div>` : ''}
+                ${cust.customer_type ? `<div class="text-[10px] text-slate-400">${cust.customer_type}</div>` : ''}
+            </div>
+        `);
+        marker.addTo(map);
+        customerMarkers.push(marker);
+
+        // Group for territory
+        if (cust.staff_id) {
+            if (!storesByStaff[cust.staff_id]) storesByStaff[cust.staff_id] = [];
+            storesByStaff[cust.staff_id].push([cust.lat, cust.lng]);
+        }
+    });
+
+    // Draw bounding-box territory rectangle per staff_id (from their store coordinates)
+    Object.entries(storesByStaff).forEach(([staffId, points]) => {
+        if (points.length < 2) return;
+        const lats = points.map(p => p[0]);
+        const lngs = points.map(p => p[1]);
+        const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+        const color = staffColorMap[staffId] || '#64748b';
+
+        const polygon = L.rectangle([[minLat, minLng], [maxLat, maxLng]], {
+            color, weight: 2, opacity: 0.7,
+            fillColor: color, fillOpacity: 0.04, dashArray: '5 6'
+        }).bindPopup(`<b>เขตสาย ${staffId}</b><br><span class="text-[10px] text-slate-500">${points.length} ร้านค้า</span>`)
+            .addTo(map);
+
+        territoryPolygons.push(polygon);
+    });
 }
 
 function setDefaultDates() {
@@ -177,6 +242,9 @@ function updateFilterCheckboxes() {
         `;
         container.innerHTML += html;
     });
+
+    // Also populate the visit table staff filter dropdown
+    populateVisitStaffFilter();
 }
 
 function updateMapFiltersDB() {
@@ -640,11 +708,27 @@ async function processExcelUpload() {
 // 5. DATA TABLE & FILTERING
 // ----------------------------------------------------
 
+// Populate the staff filter dropdown for the visit table
+function populateVisitStaffFilter() {
+    const sel = document.getElementById('visit-staff-filter');
+    if (!sel) return;
+    // Keep the first 'all' option
+    const current = sel.value;
+    sel.innerHTML = '<option value="">🚗 ทุกสายวิ่ง</option>';
+    allStaffs.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id; opt.textContent = s.id;
+        if (s.id === current) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
 async function loadTableData() {
-    if (!supabaseClient) return; // Prevent crash in Mock Mode
+    if (!supabaseClient) return;
 
     const startDate = document.getElementById('report-start-date').value;
     const endDate = document.getElementById('report-end-date').value;
+    const staffFilter = (document.getElementById('visit-staff-filter')?.value || '').trim();
     const tbody = document.getElementById('visits-table-body');
 
     tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-500"><i class="ph-bold ph-spinner animate-spin mr-2"></i> กำลังโหลดข้อมูล...</td></tr>`;
@@ -659,21 +743,19 @@ async function loadTableData() {
             `)
             .order('time_in', { ascending: false });
 
-        if (startDate) {
-            query = query.gte('time_in', `${startDate}T00:00:00+07:00`);
-        }
-        if (endDate) {
-            query = query.lte('time_in', `${endDate}T23:59:59+07:00`);
-        }
+        if (startDate) query = query.gte('time_in', `${startDate}T00:00:00+07:00`);
+        if (endDate) query = query.lte('time_in', `${endDate}T23:59:59+07:00`);
+        if (staffFilter) query = query.eq('staff_id', staffFilter);
 
         const { data: visits, error } = await query;
         if (error) throw error;
 
         tbody.innerHTML = '';
 
-        // Clear previously drawn dynamic customers
-        customerMarkers.forEach(m => map.removeLayer(m));
-        customerMarkers = [];
+        // Clear previously drawn dynamic customers from visit-based markers
+        // (loadCustomers handles the base layer; here we only clear the visit-specific green dots)
+        const visitMarkersCopy = [...customerMarkers.filter(m => m._visitDot)];
+        visitMarkersCopy.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
         plottedCustomerIds.clear();
 
         if (visits.length === 0) {
@@ -681,31 +763,51 @@ async function loadTableData() {
             return;
         }
 
+        // Pre-compute cumulative daily km for each staff in this visit list
+        const staffIdsInView = [...new Set(visits.map(v => v.staff_id).filter(Boolean))];
+        const dateStr = startDate || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
+        const kmCache = {};
+        await Promise.all(staffIdsInView.map(async sid => {
+            const { data: logs } = await supabaseClient
+                .from('gps_logs')
+                .select('lat, lng, timestamp')
+                .eq('staff_id', sid)
+                .gte('timestamp', `${dateStr}T00:00:00+07:00`)
+                .lte('timestamp', `${dateStr}T23:59:59+07:00`)
+                .order('timestamp', { ascending: true });
+            let km = 0, prev = null;
+            (logs || []).forEach(log => {
+                if (!log.lat || !log.lng) return;
+                if (prev) km += haversineKm(prev[0], prev[1], log.lat, log.lng);
+                prev = [log.lat, log.lng];
+            });
+            kmCache[sid] = km;
+        }));
+
         visits.forEach(v => {
-            // Staff display: show route code (staff_id) as primary + name underneath
             const staffIdDisplay = v.staff_id;
             const routeName = v.staffs?.name || '';
-            const staffName = `
+            const staffHtml = `
                 <div class="leading-tight">
                     <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[11px] font-bold border border-blue-200">${staffIdDisplay}</span>
                     ${routeName ? `<div class="text-[10px] text-slate-500 mt-0.5">${routeName}</div>` : ''}
                 </div>`;
 
-            // Store display: name (bold) + customer_code (badge) + type (small)
-            const customerNameHtml = v.customers ? `
+            const cust = v.customers;
+            const customerHtml = cust ? `
                 <div class="leading-tight">
-                    <div class="font-bold text-slate-700 text-[13px]">${v.customers.name}</div>
+                    <div class="font-bold text-slate-700 text-[13px]">${cust.name}</div>
                     <div class="flex items-center gap-1 mt-0.5 flex-wrap">
-                        ${v.customers.customer_code ? `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono border">${v.customers.customer_code}</span>` : ''}
-                        ${v.customers.customer_type ? `<span class="text-[10px] text-slate-400">${v.customers.customer_type}</span>` : ''}
+                        ${cust.customer_code ? `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono border">${cust.customer_code}</span>` : ''}
+                        ${cust.customer_type ? `<span class="text-[10px] text-slate-400">${cust.customer_type}</span>` : ''}
                     </div>
                 </div>
             ` : '<span class="text-slate-400">Unknown</span>';
+
             const timeOpts = { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' };
             const startTime = new Date(v.time_in).toLocaleTimeString('th-TH', timeOpts);
             const endTime = v.time_out ? new Date(v.time_out).toLocaleTimeString('th-TH', timeOpts) : 'กำลังเยี่ยม';
 
-            // Format Duration
             let durationStr = '-';
             if (v.duration_mins) {
                 const h = Math.floor(v.duration_mins / 60);
@@ -717,51 +819,49 @@ async function loadTableData() {
                 ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold">Drive-by</span>`
                 : `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">Real Visit</span>`;
 
+            // Show daily cumulative km for this staff
+            const kmToday = kmCache[v.staff_id];
+            const kmDisplay = kmToday !== undefined ? `${kmToday.toFixed(1)} กม.` : '-';
+
             tbody.innerHTML += `
                 <tr class="interactive-row">
-                    <td class="p-3 text-center sm:text-left">${staffName}</td>
-                    <td class="p-3">${customerNameHtml}</td>
+                    <td class="p-3 text-center sm:text-left">${staffHtml}</td>
+                    <td class="p-3">${customerHtml}</td>
                     <td class="p-3 text-center text-blue-600 font-medium">${startTime} - ${endTime}</td>
                     <td class="p-3 text-center text-slate-600">${durationStr}</td>
                     <td class="p-3 text-center">${typeBadge}</td>
-                    <td class="p-3 text-center text-indigo-600 font-medium">${v.distance_to_customer ? v.distance_to_customer.toFixed(2) : '-'}</td>
+                    <td class="p-3 text-center text-indigo-600 font-medium">${kmDisplay}</td>
                     <td class="p-3 text-center"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">Online</span></td>
                 </tr>
             `;
 
-            // Dynamically draw customer on map if not already plotted
-            if (v.customers && v.customers.lat && v.customers.lng) {
-                const cust = v.customers;
+            // Mark visited stores with a green overlay dot on the map
+            if (cust?.lat && cust?.lng) {
                 const custKey = `${cust.lat},${cust.lng}`;
                 if (!plottedCustomerIds.has(custKey)) {
                     plottedCustomerIds.add(custKey);
-
-                    const marker = L.circleMarker([cust.lat, cust.lng], {
-                        radius: 6, fillColor: "#10b981", color: "#047857", weight: 2, fillOpacity: 1 // Green means visited
-                    }).bindPopup(`
-                        <div class="font-prompt text-center min-w-[150px]">
-                            <div class="flex items-center justify-center mb-1">
-                                ${cust.staff_id ? `<span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold mr-1 border whitespace-nowrap">${cust.staff_id}</span>` : ''}
-                                <b class="text-sm text-slate-800 leading-tight">${cust.name}</b>
+                    const dot = L.circleMarker([cust.lat, cust.lng], {
+                        radius: 7, fillColor: '#10b981', color: '#047857', weight: 2.5, fillOpacity: 1
+                    });
+                    dot._visitDot = true;
+                    dot.bindPopup(`
+                        <div class="font-prompt min-w-[160px]">
+                            <div class="flex items-center gap-1 mb-1">
+                                ${cust.staff_id ? `<span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold border">${cust.staff_id}</span>` : ''}
+                                <b class="text-[13px] text-slate-800">${cust.name}</b>
                             </div>
-                            ${cust.customer_type ? `<div class="text-[10px] text-slate-500 font-medium">${cust.customer_type}</div>` : ''}
-                            <div class="text-[10px] text-emerald-600 mt-1 font-bold whitespace-nowrap"><i class="ph-bold ph-check-circle mr-1"></i>เข้าเยี่ยมแล้ว</div>
+                            ${cust.customer_code ? `<div class="text-[10px] font-mono text-slate-500">${cust.customer_code}</div>` : ''}
+                            ${cust.customer_type ? `<div class="text-[10px] text-slate-400">${cust.customer_type}</div>` : ''}
+                            <div class="text-[10px] text-emerald-600 mt-1 font-bold"><i class="ph-bold ph-check-circle mr-1"></i>เข้าเยี่ยมแล้ว</div>
                         </div>
                     `).addTo(map);
-
-                    const geofence = L.circle([cust.lat, cust.lng], {
-                        radius: 40,
-                        color: '#34d399', fillColor: '#a7f3d0', fillOpacity: 0.15, weight: 1.5
-                    }).addTo(map);
-
-                    customerMarkers.push(marker);
-                    customerMarkers.push(geofence);
+                    customerMarkers.push(dot);
                 }
             }
         });
 
     } catch (err) {
-        console.error("Error loading table data", err);
+        console.error('Error loading table data', err);
         tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-rose-500 font-medium">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>`;
     }
 }
