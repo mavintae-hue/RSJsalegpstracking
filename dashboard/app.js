@@ -794,15 +794,16 @@ async function loadTableData() {
                 </div>`;
 
             const cust = v.customers;
-            const customerHtml = cust ? `
+            // Fallback to customer_name stored directly on visits if join fails
+            const storeName = cust?.name || v.customer_name || `รหัส #${v.customer_id || '?'}`;
+            const codeStr = cust?.customer_code ? ` (${cust.customer_code})` : '';
+            const typeStr = cust?.customer_type ? ` ${cust.customer_type}` : '';
+            const customerHtml = `
                 <div class="leading-tight">
-                    <div class="font-bold text-slate-700 text-[13px]">${cust.name}</div>
-                    <div class="flex items-center gap-1 mt-0.5 flex-wrap">
-                        ${cust.customer_code ? `<span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono border">${cust.customer_code}</span>` : ''}
-                        ${cust.customer_type ? `<span class="text-[10px] text-slate-400">${cust.customer_type}</span>` : ''}
-                    </div>
+                    <div class="font-bold text-slate-700 text-[13px]">${storeName}<span class="font-normal text-slate-500">${codeStr}</span><span class="font-medium text-blue-600 text-[11px]">${typeStr}</span></div>
+                    ${cust?.district ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="ph-regular ph-map-pin mr-0.5"></i>${cust.district}</div>` : ''}
                 </div>
-            ` : '<span class="text-slate-400">Unknown</span>';
+            `;
 
             const timeOpts = { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' };
             const startTime = new Date(v.time_in).toLocaleTimeString('th-TH', timeOpts);
