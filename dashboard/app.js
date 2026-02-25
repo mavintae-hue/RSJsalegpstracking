@@ -78,7 +78,9 @@ async function loadCustomers() {
         .from('visits').select('customer_id')
         .gte('time_in', `${today}T00:00:00+07:00`)
         .lte('time_in', `${today}T23:59:59+07:00`);
-    stats.totalStores = new Set((visitsToday || []).map(v => v.customer_id)).size;
+
+    const visitedStoreIds = new Set((visitsToday || []).map(v => v.customer_id));
+    stats.totalStores = visitedStoreIds.size;
     updateStatsUI();
 
     // Load ALL stores and plot on map
@@ -123,9 +125,22 @@ async function loadCustomers() {
                 </div>
                 ${cust.customer_code ? `<div class="text-[10px] text-slate-500 font-mono">${cust.customer_code}</div>` : ''}
                 ${cust.customer_type ? `<div class="text-[10px] text-slate-400">${cust.customer_type}</div>` : ''}
+                ${visitedStoreIds.has(cust.id) ? '<div class="mt-1 text-emerald-600 font-bold text-[10px]"><i class="ph-fill ph-check-circle"></i> เยี่ยมแล้ววันนี้</div>' : '<div class="mt-1 text-slate-400 font-medium text-[10px]"><i class="ph-regular ph-clock"></i> ยังไม่ได้เยี่ยม</div>'}
             </div>
         `);
-        marker.addTo(map);
+
+        marker.isVisited = visitedStoreIds.has(cust.id);
+
+        // Hide unvisited feature requested by user Defaults to true (checked) if not toggled manually
+        const cx = document.getElementById('hide-unvisited-cx');
+        if (cx) cx.checked = true; // Force default checked state per user request
+
+        const hideUnvisited = document.getElementById('hide-unvisited-cx')?.checked ?? true;
+
+        if (marker.isVisited || !hideUnvisited) {
+            marker.addTo(map);
+        }
+
         customerMarkers.push(marker);
 
         // Group for territory
@@ -134,6 +149,16 @@ async function loadCustomers() {
             storesByStaff[cust.staff_id].push([cust.lat, cust.lng]);
         }
     });
+
+    window.toggleUnvisitedStores = function () {
+        const hideUnvisited = document.getElementById('hide-unvisited-cx').checked;
+        customerMarkers.forEach(m => {
+            if (!m.isVisited) {
+                if (hideUnvisited) map.removeLayer(m);
+                else m.addTo(map);
+            }
+        });
+    };
 
     // Draw bounding-box territory rectangle per staff_id (from their store coordinates)
     Object.entries(storesByStaff).forEach(([staffId, points]) => {
@@ -167,22 +192,31 @@ function setDefaultDates() {
     if (reportEndDateInput) reportEndDateInput.value = today;
 }
 
+let turfTerritories = {}; // Stores Turf.js features for bounds checking
+
 async function loadTerritories() {
     const { data, error } = await supabaseClient
-        .from('territories')
-        .select('name'); // Removed ST_AsGeoJSON to prevent 400 error for now
+        .from('territories_geojson')
+        .select('*');
 
     if (error) {
-        // Silently fail if territories are not set up properly yet
+        // Silently fail if view is not set up
+        console.warn('Could not load territories:', error);
         return;
     }
 
     territoryPolygons.forEach(p => map.removeLayer(p));
     territoryPolygons = [];
+    turfTerritories = {};
 
     data.forEach(t => {
         if (t.geojson) {
-            const geojson = JSON.parse(t.geojson);
+            const geojson = typeof t.geojson === 'string' ? JSON.parse(t.geojson) : t.geojson;
+            try {
+                // Save for point-in-polygon math
+                turfTerritories[t.name] = turf.feature(geojson);
+            } catch (e) { console.error("Invalid Turf geojson for", t.name, e); }
+
             const polygon = L.geoJSON(geojson, {
                 style: {
                     color: '#f97316', weight: 2, opacity: 0.9, fillColor: '#f97316', fillOpacity: 0.08, dashArray: '4, 6'
@@ -323,7 +357,7 @@ async function loadLatestStaffLocations() {
     updateStatsUI();
 }
 
-function updateMarkerUI(staff, logData) {
+function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
     const latLng = [logData.lat, logData.lng];
 
     // Check if layer group exists
@@ -333,14 +367,30 @@ function updateMarkerUI(staff, logData) {
     const group = staffMapLayers[staff.id];
     group.clearLayers(); // Remove old marker
 
-    const isOffline = (new Date() - new Date(logData.timestamp)) > 5 * 60 * 1000; // > 5 mins = offline
+    const isOffline = forceHistoryStyle ? false : (new Date() - new Date(logData.timestamp)) > 5 * 60 * 1000;
     const isMock = logData.is_mock;
-    const speed = logData.speed || 0;
+    const speed = logData.speed || ((logData.is_history || forceHistoryStyle) ? '-' : 0);
     const battery = logData.battery || '--';
     const batColor = battery <= 20 ? 'text-rose-600' : 'text-emerald-600';
     const batIcon = battery <= 20 ? 'battery-warning' : (battery > 80 ? 'battery-high' : 'battery-medium');
-    const offlineText = isOffline ? '<span class="text-slate-400"><i class="ph-bold ph-wifi-slash"></i> Offline</span>' : '<span class="text-blue-500"><i class="ph-bold ph-wifi-high"></i> Online</span>';
+    let offlineText = isOffline ? '<span class="text-slate-400"><i class="ph-bold ph-wifi-slash"></i> Offline</span>' : '<span class="text-blue-500"><i class="ph-bold ph-wifi-high"></i> Online</span>';
+    if (forceHistoryStyle) offlineText = '<span class="text-orange-500"><i class="ph-bold ph-clock-counter-clockwise"></i> อดีต</span>';
     const mockHtml = isMock ? `<div class="mt-1 bg-rose-100 border border-rose-300 text-rose-700 text-[10px] font-bold py-0.5 px-2 rounded animate-pulse"><i class="ph-fill ph-warning"></i>ระวัง! Fake GPS</div>` : '';
+
+    // Geofencing Check
+    let isOutOfBounds = false;
+    let outOfBoundsHtml = '';
+    if (staff.territory && turfTerritories[staff.territory] && typeof turf !== 'undefined') {
+        const pt = turf.point([logData.lng, logData.lat]); // Turf uses [lng, lat]
+        const poly = turfTerritories[staff.territory];
+        if (!turf.booleanPointInPolygon(pt, poly)) {
+            isOutOfBounds = true;
+            outOfBoundsHtml = `<div class="mt-1 bg-rose-600 text-white text-[10px] font-bold py-0.5 px-2 rounded shadow-sm flex items-center justify-center animate-pulse"><i class="ph-bold ph-warning-octagon mr-1"></i> ออกนอกเขต!</div>`;
+        }
+    } else if (staff.territory) {
+        // Territory defined but polygon not drawn yet
+        outOfBoundsHtml = `<div class="mt-1 bg-slate-100 text-slate-500 border border-slate-200 text-[9px] font-bold py-0.5 px-1 rounded truncate">รอตั้งค่าเขต: ${staff.territory}</div>`;
+    }
 
     const deviceStatusHTML = `
         <div class="flex justify-between items-center text-[10px] bg-slate-100 p-1.5 rounded mt-2 border border-slate-200">
@@ -349,9 +399,10 @@ function updateMarkerUI(staff, logData) {
             ${offlineText}
         </div>
         ${mockHtml}
+        ${outOfBoundsHtml}
     `;
 
-    const marker = L.marker(latLng, { icon: createStaffIcon(staff.id, staff.color || 'blue', false, isOffline) })
+    const marker = L.marker(latLng, { icon: createStaffIcon(staff.id, staff.color || 'blue', isOutOfBounds, isOffline) })
         .bindPopup(`
             <div class="text-center min-w-[190px] font-prompt pt-1">
                 <div class="flex items-center justify-center mb-1">
@@ -364,6 +415,37 @@ function updateMarkerUI(staff, logData) {
         `);
 
     marker.addTo(group);
+
+    // Auto-update out-of-bounds stat counter in the background
+    updateOutOfBoundsStat();
+}
+
+function updateOutOfBoundsStat() {
+    let outCount = 0;
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    // We count icons that are currently displayed and have the out-of-bounds glow
+    Object.values(staffMapLayers).forEach(group => {
+        group.eachLayer(layer => {
+            if (layer.options.icon && layer.options.icon.options.html && layer.options.icon.options.html.includes('out-of-bounds-glow')) {
+                // If it's visible based on filter
+                const staffIdMatch = layer.options.icon.options.html.match(/<div class="[^"]*">([^<]+)<\/div>\s*<i class="ph-fill ph-car-profile/);
+                if (staffIdMatch && staffIdMatch[1]) {
+                    const id = staffIdMatch[1].trim();
+                    if (checkedStaffIds.size === 0 || checkedStaffIds.has(id)) {
+                        outCount++;
+                    }
+                } else {
+                    outCount++; // Fallback
+                }
+            }
+        });
+    });
+
+    const el = document.getElementById('stat-staff-out');
+    if (el) el.innerHTML = `${outCount} <span class="text-[10px] font-normal text-rose-500">คน</span>`;
 }
 
 // ----------------------------------------------------
@@ -399,6 +481,8 @@ function addRealtimeAlert(type, message, time, staffId) {
 
 // Path history layer storage - stores a LayerGroup per staffId
 let historyPathLayers = {};
+let dailyGpsLogs = []; // Cache for time slider playback
+let isHistoricalPlayback = false;
 
 // Haversine formula for distance in km between two lat/lng pairs
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -418,10 +502,11 @@ async function updatePathHistory() {
 
     if (!selectedDate) return;
 
-    // Build the time range strictly within the selected date (Thai timezone)
+    // Fetch the FULL day of logs for the time slider cache
     const dayStart = `${selectedDate}T00:00:00+07:00`;
     const dayEnd = `${selectedDate}T23:59:59+07:00`;
 
+    // Calculate time range for the path visibility strictly
     let rangeStart = dayStart;
     if (hoursBack !== 'all') {
         const hours = parseInt(hoursBack);
@@ -435,13 +520,20 @@ async function updatePathHistory() {
         }
     }
 
-    // Fetch GPS logs within the date window
-    const { data: logs, error } = await supabaseClient
+    // Fetch GPS logs within the full day for slider to work perfectly
+    const { data: fullDayLogs, error } = await supabaseClient
         .from('gps_logs')
-        .select('staff_id, lat, lng, timestamp')
-        .gte('timestamp', rangeStart)
+        .select('staff_id, lat, lng, timestamp, speed, battery, is_mock')
+        .gte('timestamp', dayStart)
         .lte('timestamp', dayEnd)
         .order('timestamp', { ascending: true });
+
+    if (error) { console.error('Error loading history path:', error); return; }
+
+    dailyGpsLogs = fullDayLogs || [];
+
+    // Filter to exactly what the user selected to draw the path line
+    const logs = dailyGpsLogs.filter(log => new Date(log.timestamp) >= new Date(rangeStart));
 
     if (error) { console.error('Error loading history path:', error); return; }
 
@@ -502,7 +594,77 @@ async function updatePathHistory() {
     const visibleCoords = Object.entries(staffGroups)
         .filter(([id]) => checkedStaffIds.size === 0 || checkedStaffIds.has(id))
         .flatMap(([, coords]) => coords);
-    if (visibleCoords.length > 1) map.fitBounds(visibleCoords, { padding: [30, 30] });
+    if (visibleCoords.length > 1) {
+        // Adjust padding based on screen size, on mobile don't pad as much
+        const pad = window.innerWidth > 768 ? 50 : 20;
+        map.fitBounds(visibleCoords, { padding: [pad, pad] });
+    }
+}
+
+// Slider playback function
+function scrubTimeHistory() {
+    const slider = document.getElementById('time-slider');
+    const display = document.getElementById('slider-time-display');
+    const selectedDate = document.getElementById('history-date').value;
+    const mins = parseInt(slider.value, 10);
+
+    if (mins >= 1440) {
+        display.textContent = 'ปัจจุบัน (Real-time)';
+        display.className = 'ml-2 font-mono bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 rounded shadow-sm font-bold text-xs';
+
+        // If returning from playback, reload normal live map state
+        if (isHistoricalPlayback) {
+            isHistoricalPlayback = false;
+            loadMapData();
+        }
+        return;
+    }
+
+    isHistoricalPlayback = true;
+
+    // Format minutes to HH:MM
+    const h = Math.floor(mins / 60).toString().padStart(2, '0');
+    const m = (mins % 60).toString().padStart(2, '0');
+    display.textContent = `${h}:${m} น.`;
+    display.className = 'ml-2 font-mono bg-orange-100 border border-orange-200 text-orange-800 px-2 py-0.5 rounded shadow-sm font-bold text-xs';
+
+    if (!dailyGpsLogs.length) return;
+
+    // Create the target exact Date time object
+    const targetDateStr = `${selectedDate}T${h}:${m}:00+07:00`;
+    const targetTime = new Date(targetDateStr).getTime();
+
+    // Checked staff filters
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    // Group logs by staff that was recorded BEFORE or EXACTLY AT the scrubbed time
+    const latestLogsPerStaff = {};
+    for (const log of dailyGpsLogs) {
+        const logTime = new Date(log.timestamp).getTime();
+        if (logTime <= targetTime) {
+            // Overwrite earlier logs with newer ones (since array is ascending order already)
+            latestLogsPerStaff[log.staff_id] = log;
+        }
+    }
+
+    // Update marker UI positions based on computed history
+    for (const staff of allStaffs) {
+        const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staff.id);
+        const group = staffMapLayers[staff.id];
+        const logData = latestLogsPerStaff[staff.id];
+
+        if (group) group.clearLayers();
+
+        if (logData && logData.lat && logData.lng && isVisible) {
+            // Re-create group if missing (deleted earlier)
+            if (!staffMapLayers[staff.id]) {
+                staffMapLayers[staff.id] = L.layerGroup().addTo(map);
+            }
+            updateMarkerUI(staff, logData, true); // true = force history style
+        }
+    }
 }
 
 // When staff filter checkbox changes, also toggle history path visibility
@@ -618,7 +780,7 @@ function handleFileSelect(event) {
 
 async function processExcelUpload() {
     if (!excelDataToUpload || excelDataToUpload.length === 0) {
-        alert("กรุณาเลือกไฟล์ Excel และตรวจสอบให้มั่นใจว่าไฟล์มีข้อมูล");
+        alert("กรุณาเลือกไฟล์ CSV หรือ Excel และตรวจสอบให้มั่นใจว่าไฟล์มีข้อมูล");
         return;
     }
 
@@ -640,17 +802,46 @@ async function processExcelUpload() {
             console.log('📋 First row sample:', excelDataToUpload[0]);
         }
 
-        const rawPayload = excelDataToUpload.map(row => {
-            const name = row.name || row.Name || row['ชื่อ'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'] || null;
-            const lat = parseFloat(row.lat ?? row.Lat ?? row.Latitude ?? row['ละติจูด']);
-            const lng = parseFloat(row.lng ?? row.Lng ?? row.Lon ?? row.Longitude ?? row['ลองจิจูด']);
+        const rawPayload = excelDataToUpload.map(rawRow => {
+            // First normalize keys to handle spaces and case sensitivity
+            const row = {};
+            for (let k in rawRow) {
+                if (rawRow.hasOwnProperty(k)) {
+                    // Remove quotes, trim spaces, lowercase
+                    const cleanKey = k.replace(/["']/g, '').trim().toLowerCase();
+                    row[cleanKey] = rawRow[k];
+                }
+            }
+
+            // Prioritize Thai names FIRST (so 'name' column which might contain ERP ID is checked last)
+            let name = row['ชื่อ'] || row['ชื่อลูกค้า'] || row['ชื่อร้าน'] || row['customer_name'] || row['customer name'] || row['name'] || null;
+            let customer_code = row['ลูกค้า'] || row['รหัสลูกค้า'] || row['รหัส'] || row['customer_code'] || row['customer code'] || row['code'] || null;
+
+            // Failsafe: if name is purely numeric and customer_code is null, they likely got swapped or "name" grabbed the code
+            if (name && /^[0-9]+$/.test(String(name).trim()) && !customer_code) {
+                customer_code = String(name).trim();
+                name = null; // We'll try to guess the real name below
+
+                // Try to find any column value that is a non-numeric string (likely the Thai name)
+                for (let k in row) {
+                    const val = String(row[k]).trim();
+                    if (val && !/^[0-9.\-]+$/.test(val) && val !== row['staff_id'] && val !== row['สายวิ่ง'] && val !== row['ชื่อประเภทย่อยของลูกค้า'] && k !== 'staff_id' && k !== 'สายวิ่ง') {
+                        name = val;
+                        break;
+                    }
+                }
+            }
+
+            const lat = parseFloat(row['lat'] || row['latitude'] || row['ละติจูด']);
+            const lng = parseFloat(row['lng'] || row['lon'] || row['longitude'] || row['ลองจิจูด']);
+
             return {
                 name,
-                customer_code: row.customer_code || row['ลูกค้า'] || null,
+                customer_code,
                 lat, lng,
-                staff_id: row.staff_id || row['สายวิ่ง'] || null,
-                customer_type: row.customer_type || row['ชื่อประเภทย่อยของลูกค้า'] || null,
-                district: row.district || row['อำเภอทางภูมิศ'] || null
+                staff_id: row['staff_id'] || row['สายวิ่ง'] || null,
+                customer_type: row['customer_type'] || row['ประเภท'] || row['ชื่อประเภทย่อยของลูกค้า'] || null,
+                district: row['district'] || row['อำเภอ'] || row['อำเภอทางภูมิศ'] || null
             };
         });
 
