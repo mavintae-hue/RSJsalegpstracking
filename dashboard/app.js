@@ -380,16 +380,12 @@ function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
     // Geofencing Check
     let isOutOfBounds = false;
     let outOfBoundsHtml = '';
-    if (staff.territory && turfTerritories[staff.territory] && typeof turf !== 'undefined') {
-        const pt = turf.point([logData.lng, logData.lat]); // Turf uses [lng, lat]
-        const poly = turfTerritories[staff.territory];
-        if (!turf.booleanPointInPolygon(pt, poly)) {
-            isOutOfBounds = true;
-            outOfBoundsHtml = `<div class="mt-1 bg-rose-600 text-white text-[10px] font-bold py-0.5 px-2 rounded shadow-sm flex items-center justify-center animate-pulse"><i class="ph-bold ph-warning-octagon mr-1"></i> ออกนอกเขต!</div>`;
-        }
-    } else if (staff.territory) {
-        // Territory defined but polygon not drawn yet
-        outOfBoundsHtml = `<div class="mt-1 bg-slate-100 text-slate-500 border border-slate-200 text-[9px] font-bold py-0.5 px-1 rounded truncate">รอตั้งค่าเขต: ${staff.territory}</div>`;
+    
+    // The backend PostGIS trigger already calculates in_territory for every gps log.
+    // If it is explicitly false, they are out of bounds. If true or null, they are fine.
+    if (logData.in_territory === false) {
+        isOutOfBounds = true;
+        outOfBoundsHtml = `<div class="mt-1 bg-rose-600 text-white text-[10px] font-bold py-0.5 px-2 rounded shadow-sm flex items-center justify-center animate-pulse"><i class="ph-bold ph-warning-octagon mr-1"></i> ออกนอกเขต!</div>`;
     }
 
     const deviceStatusHTML = `

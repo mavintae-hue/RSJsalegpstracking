@@ -282,256 +282,273 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up delay-200">
+        <div class="flex flex-col gap-6 animate-fade-in-up delay-200">
 
-            <!-- Map Section -->
+            <!-- Expanded Full Width Map Section -->
             <div
-                class="lg:col-span-2 bg-white p-3 rounded-2xl shadow-md border border-slate-200 overflow-hidden relative group flex flex-col">
+                class="bg-white p-2 sm:p-3 rounded-2xl shadow-md border border-slate-200 relative w-full flex flex-col">
 
-                <!-- Filter Control Panel -->
-                <div
-                    class="mb-3 px-1 sm:px-2 flex flex-col sm:flex-row gap-3 items-start sm:items-center z-20 relative bg-white rounded-xl">
+                <div class="relative rounded-xl overflow-hidden border border-slate-200 w-full flex-grow"
+                    style="min-height: 500px;">
 
-                    <div class="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0"
-                        style="scrollbar-width: none;">
-                        <span class="text-sm font-bold text-slate-700 flex items-center shrink-0"><i
-                                class="ph-fill ph-funnel mr-1.5 text-blue-500"></i> ตัวกรอง:</span>
-                        <div class="flex space-x-2 shrink-0" id="filter-container">
-                            <!-- Dynamic Checkboxes injected here -->
-                        </div>
-                    </div>
-
-                    <div class="h-px w-full sm:h-6 sm:w-px bg-slate-200 my-1 sm:my-0 sm:mx-1 hidden sm:block"></div>
-
-                    <!-- Date Picker & Time History Selector -->
-                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end shrink-0">
-                        <div
-                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm flex-1 sm:flex-none justify-center">
-                            <div class="px-2 text-slate-500"><i class="ph-bold ph-calendar-blank"></i></div>
-                            <input type="date" id="history-date"
-                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer w-full max-w-[120px]"
-                                onchange="updatePathHistory()">
-                        </div>
-
-                        <div
-                            class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-sm flex-1 sm:flex-none justify-center">
-                            <div class="px-2 text-slate-500"><i class="ph-bold ph-clock-counter-clockwise"></i></div>
-                            <select id="path-history-select" onchange="updatePathHistory()"
-                                class="bg-transparent text-slate-700 text-xs font-medium focus:outline-none p-1.5 cursor-pointer pr-2 w-full max-w-[100px]">
-                                <option value="1">ย้อน 1 ชม.</option>
-                                <option value="3">ย้อน 3 ชม.</option>
-                                <option value="6">ย้อน 6 ชม.</option>
-                                <option value="all">ทั้งวัน</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Time Slider Control & Visited Stores Toggle -->
-            <div class="mb-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl shadow-sm text-sm">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                    <div class="flex items-center">
-                        <span class="font-bold text-slate-700"><i class="ph-bold ph-clock mr-1 text-blue-500"></i>
-                            ดูตำแหน่งตามเวลา:</span>
-                        <span id="slider-time-display"
-                            class="ml-2 font-mono bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 rounded shadow-sm font-bold text-xs">ปัจจุบัน
-                            (Real-time)</span>
-                    </div>
-                    <label
-                        class="flex items-center space-x-2 cursor-pointer bg-white px-2 py-1 rounded border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition">
-                        <input type="checkbox" id="hide-unvisited-cx" onchange="toggleUnvisitedStores()"
-                            class="rounded text-blue-500 focus:ring-blue-500 w-3.5 h-3.5">
-                        <span>ซ่อนร้านค้าที่ไม่ได้เข้าเยี่ยมวันนี้</span>
-                    </label>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <span class="text-[10px] font-medium text-slate-500">00:00</span>
-                    <input type="range" id="time-slider" min="0" max="1440" value="1440"
-                        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 outline-none focus:ring-2 focus:ring-blue-300"
-                        oninput="scrubTimeHistory()">
-                    <span class="text-[10px] font-medium text-slate-500">23:59</span>
-                </div>
-            </div>
-
-            <div class="relative rounded-xl overflow-hidden border border-slate-200">
-                <div
-                    class="absolute top-4 right-4 z-[400] bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm border border-emerald-100 flex items-center">
-                    <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping mr-2"></span> <span
-                        id="realtimeStatus">อัปเดตแบบ Real-time</span>
-                </div>
-                <!-- Map Container -->
-                <div id="map" class="rounded-xl"></div>
-            </div>
-
-            <!-- Legend -->
-            <div class="bg-slate-50 p-3 mt-2 rounded-xl border border-slate-100 flex overflow-x-auto whitespace-nowrap gap-4 text-[11px] text-slate-600 font-medium"
-                style="scrollbar-width: none;">
-                <div class="flex items-center shrink-0"><span
-                        class="w-3.5 h-3.5 border border-orange-400 rounded mr-1.5 bg-orange-100 bg-opacity-50"></span>
-                    เขตรับผิดชอบ</div>
-                <div class="flex items-center shrink-0"><span
-                        class="w-3.5 h-3.5 border-2 border-emerald-500 rounded-full mr-1.5 bg-emerald-100"></span>
-                    รัศมีร้านค้า 40m</div>
-                <div class="flex items-center shrink-0"><i
-                        class="ph-fill ph-storefront text-emerald-500 mr-1 text-base drop-shadow-sm"></i>
-                    ร้านที่เยี่ยมแล้ว</div>
-                <div class="flex items-center shrink-0"><span
-                        class="w-2.5 h-2.5 bg-slate-400 rounded-full mr-1.5"></span>
-                    ร้านยังไม่เยี่ยม</div>
-                <div class="flex items-center shrink-0"><i class="ph-bold ph-trend-up text-slate-500 mr-1 text-sm"></i>
-                    <span id="legend-path-text">เส้นทาง (ย้อนหลัง 1 ชม.)</span>
-                </div>
-                <div class="flex items-center shrink-0"><i
-                        class="ph-fill ph-car-profile text-rose-600 mr-1 text-lg drop-shadow-md"></i> ออกนอกเขต
-                </div>
-            </div>
-        </div>
-
-        <!-- Live Alerts -->
-        <div
-            class="bg-white rounded-2xl shadow-md border border-slate-200 h-full flex flex-col overflow-hidden animate-fade-in-up delay-300">
-            <div class="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <h2 class="text-base font-bold flex items-center text-slate-800"><i
-                        class="ph-fill ph-bell-ringing mr-2 text-amber-500 text-xl"></i> แจ้งเตือนล่าสุด</h2>
-                <span class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold"
-                    id="alert-counter">เตรียมพร้อมระบบ</span>
-            </div>
-            <div class="p-4 space-y-3 flex-grow overflow-y-auto" style="max-height: 480px;" id="alerts-container">
-                <!-- Dynamic Alerts will populate here-->
-                <div
-                    class="p-4 bg-white rounded-xl border border-slate-100 shadow-sm text-center text-sm text-slate-500">
-                    กำลังเชื่อมต่อฐานข้อมูล...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Data Table -->
-    <div
-        class="bg-white rounded-2xl shadow-md border border-slate-200 mt-6 overflow-hidden animate-fade-in-up delay-400">
-        <div
-            class="p-5 border-b border-slate-100 flex flex-col md:flex-row md:justify-between items-start md:items-center bg-slate-50 gap-4">
-            <h2 class="text-base font-bold flex items-center text-slate-800"><i
-                    class="ph-fill ph-table mr-2 text-blue-600 text-xl"></i> บันทึกการเข้าเยี่ยมร้านค้า</h2>
-
-            <div
-                class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full md:w-auto mt-3 md:mt-0">
-                <div
-                    class="flex items-center justify-between sm:justify-start space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm overflow-hidden">
-                    <i class="ph-bold ph-calendar-blank text-slate-400 shrink-0"></i>
-                    <input type="date" id="report-start-date"
-                        class="text-sm text-slate-600 focus:outline-none bg-transparent w-full min-w-[100px]">
-                    <span class="text-slate-400 text-xs shrink-0">ถึง</span>
-                    <input type="date" id="report-end-date"
-                        class="text-sm text-slate-600 focus:outline-none bg-transparent w-full min-w-[100px]">
-                </div>
-
-                <div class="flex gap-2 w-full sm:w-auto">
-                    <select id="visit-staff-filter" onchange="loadTableData()"
-                        class="flex-1 sm:flex-none bg-white border border-slate-200 text-slate-600 px-3 py-2 sm:py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm">
-                        <option value="">🚗 ทุกสายวิ่ง</option>
-                    </select>
-                    <button onclick="loadTableData()"
-                        class="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 sm:py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center">
-                        <i class="ph-bold ph-funnel mr-1.5"></i> กรอง
-                    </button>
-
-                    <button
-                        class="flex-1 sm:flex-none justify-center bg-white border border-slate-300 text-slate-700 px-4 py-2 sm:py-1.5 rounded-lg text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
-                        <i class="ph-bold ph-export mr-1"></i> Export
-                    </button>
-                </div>
-
-                <a href="analytics.html"
-                    class="w-full sm:w-auto justify-center bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 sm:py-1.5 rounded-lg text-sm hover:bg-indigo-100 transition-colors shadow-sm font-bold flex items-center mt-1 sm:mt-0">
-                    <i class="ph-fill ph-chart-line-up mr-1.5"></i> BI Dashboard
-                </a>
-            </div>
-        </div>
-    </div>
-    <div class="overflow-x-auto p-4">
-        <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap">
-            <thead>
-                <tr>
-                    <th class="p-3 font-semibold text-slate-500 bg-slate-50 rounded-l-xl">สายวิ่ง (พนักงาน)</th>
-                    <th class="p-3 font-semibold text-slate-500 bg-slate-50">ร้านค้าที่เข้าเยี่ยม</th>
-                    <th class="p-3 text-center font-semibold text-blue-700 bg-blue-50/50">เข้า-ออกร้าน</th>
-                    <th class="p-3 text-center font-semibold text-blue-700 bg-blue-50/50">เวลาในร้าน (Dwell)
-                    </th>
-                    <th class="p-3 text-center font-semibold text-emerald-700 bg-emerald-50/50">ประเภทการเยี่ยม
-                    </th>
-                    <th class="p-3 text-center font-semibold text-indigo-700 bg-indigo-50/50">ระยะทาง (กม.)</th>
-                    <th class="p-3 font-semibold text-center text-slate-500 bg-slate-50 rounded-r-xl">
-                        สถานะอุปกรณ์</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100" id="visits-table-body">
-                <!-- Simulated Table For Now -->
-            </tbody>
-        </table>
-    </div>
-    </div>
-    </div>
-
-    <!-- Upload Modal -->
-    <div id="upload-modal"
-        class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center transition-opacity duration-300 p-4">
-        <div
-            class="bg-white rounded-2xl shadow-2xl w-full max-w-[400px] p-0 relative animate-modal-pop border border-slate-100 overflow-hidden">
-            <div class="bg-slate-50 p-5 border-b border-slate-100 flex justify-between items-center">
-                <h2 class="text-lg font-bold flex items-center text-slate-800">
-                    <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3"><i
-                            class="ph-fill ph-file-xls text-lg"></i></div>นำเข้าข้อมูลลูกค้า
-                </h2>
-                <button onclick="toggleUploadModal()"
-                    class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"><i
-                        class="ph-bold ph-x"></i></button>
-            </div>
-            <div class="p-6">
-                <!-- Using ID from our app.js to bind event correctly but styling it with the new UI -->
-                <div
-                    class="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl p-8 text-center hover:bg-blue-50 transition cursor-pointer relative">
-                    <input type="file" id="excelFile" accept=".csv, .xlsx, .xls"
-                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        onchange="handleFileSelect(event)">
+                    <!-- Real-time Status Badge (Top Right) -->
                     <div
-                        class="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4">
-                        <i class="ph-bold ph-upload-simple text-3xl text-blue-500"></i>
+                        class="absolute top-4 right-4 z-[400] bg-emerald-50/90 backdrop-blur-sm text-emerald-700 px-3 py-1.5 rounded-full text-xs font-semibold shadow border border-emerald-100 flex items-center">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping mr-2"></span>
+                        <span id="realtimeStatus">อัปเดตแบบ Real-time</span>
                     </div>
-                    <p class="text-sm text-slate-700 font-semibold mb-1" id="fileNameDisplay">คลิก หรือ
-                        ลากไฟล์มาวางที่นี่</p>
+
+                    <!-- Floating Control Panel (Top Left) -->
+                    <div class="absolute top-4 left-4 z-[400] flex flex-col gap-3 w-[260px] max-w-[calc(100vw-32px)]">
+
+                        <!-- Filters Stack -->
+                        <div
+                            class="bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-100 flex flex-col gap-3 transition-all hover:bg-white hover:shadow-xl">
+                            <!-- Staff Filter -->
+                            <div class="flex flex-col gap-2">
+                                <span
+                                    class="text-[11px] font-bold text-slate-700 flex items-center uppercase tracking-wider"><i
+                                        class="ph-fill ph-funnel mr-1.5 text-blue-500"></i> เลือกสายวิ่ง</span>
+                                <div class="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto" id="filter-container">
+                                    <!-- Dynamic Checkboxes injected here -->
+                                </div>
+                            </div>
+
+                            <div class="w-full h-px bg-slate-100"></div>
+
+                            <!-- Date & Time Filters -->
+                            <div class="flex flex-col gap-2">
+                                <div
+                                    class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
+                                    <div class="px-2 text-slate-400"><i class="ph-bold ph-calendar-blank text-sm"></i>
+                                    </div>
+                                    <input type="date" id="history-date" onchange="updatePathHistory()"
+                                        class="bg-transparent text-slate-700 text-xs font-semibold focus:outline-none p-1.5 cursor-pointer w-full">
+                                </div>
+                                <div
+                                    class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
+                                    <div class="px-2 text-slate-400"><i
+                                            class="ph-bold ph-clock-counter-clockwise text-sm"></i></div>
+                                    <select id="path-history-select" onchange="updatePathHistory()"
+                                        class="bg-transparent text-slate-700 text-xs font-semibold focus:outline-none p-1.5 cursor-pointer pr-2 w-full appearance-none">
+                                        <option value="1">ย้อน 1 ชม.</option>
+                                        <option value="3">ย้อน 3 ชม.</option>
+                                        <option value="6">ย้อน 6 ชม.</option>
+                                        <option value="all">ดูทั้งวัน</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Time Slider Stack -->
+                        <div
+                            class="bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-100 flex flex-col gap-3 transition-all hover:bg-white hover:shadow-xl">
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-700 text-xs flex items-center"><i
+                                            class="ph-bold ph-clock mr-1.5 text-blue-500"></i> ย้อนเวลา</span>
+                                    <span id="slider-time-display"
+                                        class="font-mono bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-bold">ปัจจุบัน</span>
+                                </div>
+                                <div class="flex items-center space-x-2 w-full">
+                                    <span class="text-[9px] font-medium text-slate-400">00:00</span>
+                                    <input type="range" id="time-slider" min="0" max="1440" value="1440"
+                                        oninput="scrubTimeHistory()"
+                                        class="flex-grow h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 outline-none focus:ring-2 focus:ring-blue-300">
+                                    <span class="text-[9px] font-medium text-slate-400">23:59</span>
+                                </div>
+                            </div>
+
+                            <label
+                                class="flex items-center space-x-2 cursor-pointer bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+                                <input type="checkbox" id="hide-unvisited-cx" onchange="toggleUnvisitedStores()"
+                                    class="rounded text-blue-500 focus:ring-blue-500 w-3.5 h-3.5">
+                                <span
+                                    class="text-[10px] sm:text-xs font-medium text-slate-600">ซ่อนร้านที่ไม่ได้เข้าเยี่ยม</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- The Actual Map Container -->
+                    <div id="map" class="w-full h-[75vh] min-h-[500px] z-10"></div>
                 </div>
-                <div id="uploadStatus" class="mt-3 text-sm hidden font-medium text-center"></div>
-                <div class="mt-6 pt-5 flex justify-between gap-3 bg-white">
-                    <button id="btnUpload" onclick="processExcelUpload()"
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex-1 shadow-md">
-                        นำเข้าข้อมูลไปยังระบบ
-                    </button>
+
+                <!-- Legend -->
+                <div class="bg-slate-50 p-2 sm:p-3 mt-2 rounded-xl border border-slate-100 flex overflow-x-auto whitespace-nowrap gap-4 text-[11px] text-slate-600 font-medium"
+                    style="scrollbar-width: none;">
+                    <div class="flex items-center shrink-0"><span
+                            class="w-3 h-3 border border-orange-400 rounded mr-1.5 bg-orange-100 bg-opacity-50"></span>
+                        เขตรับผิดชอบ</div>
+                    <div class="flex items-center shrink-0"><span
+                            class="w-3 h-3 border-2 border-emerald-500 rounded-full mr-1.5 bg-emerald-100"></span>
+                        รัศมีเข้าเยี่ยม</div>
+                    <div class="flex items-center shrink-0"><i
+                            class="ph-fill ph-storefront text-emerald-500 mr-1 text-base"></i> เยี่ยมแล้ว</div>
+                    <div class="flex items-center shrink-0"><span
+                            class="w-2.5 h-2.5 bg-slate-400 rounded-full mr-1.5"></span> ยังไม่เยี่ยม</div>
+                    <div class="flex items-center shrink-0"><i
+                            class="ph-bold ph-trend-up text-slate-500 mr-1 text-sm"></i> <span
+                            id="legend-path-text">เส้นทาง (1 ชม.)</span></div>
+                    <div class="flex items-center shrink-0"><i
+                            class="ph-fill ph-car-profile text-rose-600 mr-1 text-base"></i> <span
+                            class="text-rose-600 font-bold ml-1">ออกนอกเขต</span></div>
+                </div>
+            </div>
+
+            <!-- Two Column Row Below Map -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in-up delay-300">
+                <!-- Live Alerts Panel -->
+                <div
+                    class="lg:col-span-1 bg-white rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden h-[400px]">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+                        <h2 class="text-sm font-bold flex items-center text-slate-800"><i
+                                class="ph-fill ph-bell-ringing mr-2 text-amber-500 text-lg"></i> แจ้งเตือนล่าสุด</h2>
+                        <span class="bg-amber-100 text-amber-700 text-[9px] px-2 py-0.5 rounded-full font-bold"
+                            id="alert-counter">เตรียมพร้อม</span>
+                    </div>
+                    <div class="p-3 space-y-2 flex-grow overflow-y-auto" id="alerts-container">
+                        <div
+                            class="p-3 bg-white rounded-xl border border-slate-100 shadow-sm text-center text-[11px] text-slate-500">
+                            กำลังเชื่อมต่อ...</div>
+                    </div>
+                </div>
+
+                <!-- Data Table Container (we move the data table into col-span-3) -->
+                <div class="lg:col-span-3">
+
+                    <!-- Data Table -->
+                    <div
+                        class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden animate-fade-in-up delay-400 h-full flex flex-col">
+                        <div
+                            class="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row md:justify-between items-start md:items-center bg-slate-50 gap-4 shrink-0">
+                            <h2 class="text-base font-bold flex items-center text-slate-800"><i
+                                    class="ph-fill ph-table mr-2 text-blue-600 text-xl"></i> บันทึกการเยี่ยมร้านค้า</h2>
+
+                            <div
+                                class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
+                                <div
+                                    class="flex items-center justify-between sm:justify-start space-x-2 bg-white border border-slate-200 rounded-lg px-2 sm:px-3 py-1.5 shadow-sm overflow-hidden">
+                                    <i class="ph-bold ph-calendar-blank text-slate-400 shrink-0"></i>
+                                    <input type="date" id="report-start-date"
+                                        class="text-xs sm:text-sm text-slate-600 focus:outline-none bg-transparent w-full min-w-[100px]">
+                                    <span class="text-slate-400 text-xs shrink-0">ถึง</span>
+                                    <input type="date" id="report-end-date"
+                                        class="text-xs sm:text-sm text-slate-600 focus:outline-none bg-transparent w-full min-w-[100px]">
+                                </div>
+
+                                <div class="flex gap-2 w-full sm:w-auto">
+                                    <select id="visit-staff-filter" onchange="loadTableData()"
+                                        class="flex-1 sm:flex-none bg-white border border-slate-200 text-slate-600 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none shadow-sm">
+                                        <option value="">🚗 ทุกสายวิ่ง</option>
+                                    </select>
+                                    <button onclick="loadTableData()"
+                                        class="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors shadow-sm flex items-center">
+                                        <i class="ph-bold ph-funnel mr-1.5"></i> กรอง
+                                    </button>
+                                    <button
+                                        class="flex-1 sm:flex-none justify-center bg-white border border-slate-300 text-slate-700 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm font-medium flex items-center">
+                                        <i class="ph-bold ph-export mr-1"></i> Export
+                                    </button>
+                                </div>
+
+                                <a href="analytics.html"
+                                    class="w-full sm:w-auto justify-center bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm hover:bg-indigo-100 transition-colors shadow-sm font-bold flex items-center">
+                                    <i class="ph-fill ph-chart-line-up mr-1.5"></i> BI Dashboard
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto p-0 flex-grow">
+                            <table class="w-full text-left text-sm text-slate-600 whitespace-nowrap">
+                                <thead class="sticky top-0 bg-slate-50 shadow-sm z-10">
+                                    <tr>
+                                        <th class="p-3 font-semibold text-slate-500">สายวิ่ง (พนักงาน)</th>
+                                        <th class="p-3 font-semibold text-slate-500">ร้านค้าที่เข้าเยี่ยม</th>
+                                        <th class="p-3 text-center font-semibold text-blue-700 bg-blue-50/50">
+                                            เข้า-ออกร้าน</th>
+                                        <th class="p-3 text-center font-semibold text-blue-700 bg-blue-50/50">เวลาในร้าน
+                                            (Dwell)
+                                        </th>
+                                        <th class="p-3 text-center font-semibold text-emerald-700 bg-emerald-50/50">
+                                            ประเภทการเยี่ยม
+                                        </th>
+                                        <th class="p-3 text-center font-semibold text-indigo-700 bg-indigo-50/50">
+                                            ระยะทาง (กม.)</th>
+                                        <th
+                                            class="p-3 font-semibold text-center text-slate-500 bg-slate-50 rounded-r-xl">
+                                            สถานะอุปกรณ์</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100" id="visits-table-body">
+                                    <!-- Simulated Table For Now -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div> <!-- END Data Table -->
+                </div> <!-- END lg:col-span-3 -->
+            </div> <!-- END lg:grid-cols-4 -->
+        </div> <!-- END flex flex-col gap-6 -->
+
+        <!-- Upload Modal -->
+        <div id="upload-modal"
+            class="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center transition-opacity duration-300 p-4">
+            <div
+                class="bg-white rounded-2xl shadow-2xl w-full max-w-[400px] p-0 relative animate-modal-pop border border-slate-100 overflow-hidden">
+                <div class="bg-slate-50 p-5 border-b border-slate-100 flex justify-between items-center">
+                    <h2 class="text-lg font-bold flex items-center text-slate-800">
+                        <div
+                            class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mr-3">
+                            <i class="ph-fill ph-file-xls text-lg"></i></div>นำเข้าข้อมูลลูกค้า
+                    </h2>
+                    <button onclick="toggleUploadModal()"
+                        class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"><i
+                            class="ph-bold ph-x"></i></button>
+                </div>
+                <div class="p-6">
+                    <!-- Using ID from our app.js to bind event correctly but styling it with the new UI -->
+                    <div
+                        class="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl p-8 text-center hover:bg-blue-50 transition cursor-pointer relative">
+                        <input type="file" id="excelFile" accept=".csv, .xlsx, .xls"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onchange="handleFileSelect(event)">
+                        <div
+                            class="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4">
+                            <i class="ph-bold ph-upload-simple text-3xl text-blue-500"></i>
+                        </div>
+                        <p class="text-sm text-slate-700 font-semibold mb-1" id="fileNameDisplay">คลิก หรือ
+                            ลากไฟล์มาวางที่นี่</p>
+                    </div>
+                    <div id="uploadStatus" class="mt-3 text-sm hidden font-medium text-center"></div>
+                    <div class="mt-6 pt-5 flex justify-between gap-3 bg-white">
+                        <button id="btnUpload" onclick="processExcelUpload()"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex-1 shadow-md">
+                            นำเข้าข้อมูลไปยังระบบ
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+        <!-- Scripts -->
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
-    <script>
-        function toggleUploadModal() {
-            const modal = document.getElementById('upload-modal');
-            modal.classList.toggle('hidden');
-        }
-
-        // Clock System
-        setInterval(() => {
-            const now = new Date();
-            if (document.getElementById('clock')) {
-                document.getElementById('clock').innerText = now.toLocaleTimeString('th-TH');
+        <script>
+            function toggleUploadModal() {
+                const modal = document.getElementById('upload-modal');
+                modal.classList.toggle('hidden');
             }
-        }, 1000);
-    </script>
-    <script src="app.js"></script>
+
+            // Clock System
+            setInterval(() => {
+                const now = new Date();
+                if (document.getElementById('clock')) {
+                    document.getElementById('clock').innerText = now.toLocaleTimeString('th-TH');
+                }
+            }, 1000);
+        </script>
+        <script src="app.js"></script>
 </body>
 
 </html>
