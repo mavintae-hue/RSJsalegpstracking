@@ -1,14 +1,12 @@
 // Replace with your keys
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://uwjkhwourxvjgosrwgxx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PIeG5dutR75P4xnAVY_59g_J4cvJZOL';
 let supabaseClient;
 let allStaffs = [];
 let charts = {}; // Store chart instances to destroy them before re-render
 
 // Setup Supabase
-if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-}
+supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ----------------------------------------------------
 // CHART RENDERERS (Chart.js)
@@ -82,11 +80,13 @@ async function loadAnalyticsData() {
     if (!monthStr) return;
 
     const [year, month] = monthStr.split('-');
-    const startDate = new Date(year, month - 1, 1).toISOString();
-    const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
+    // Use proper UTC to get the full local day string bounds
+    const startDate = new Date(`${year}-${month}-01T00:00:00+07:00`).toISOString();
+    const endDateObj = new Date(year, month, 0); // Last day of month
+    const endDate = new Date(`${year}-${month}-${endDateObj.getDate().toString().padStart(2, '0')}T23:59:59+07:00`).toISOString();
 
     if (!supabaseClient) {
-        console.log("Mock Mode: Generating dummy data for BI Dashboard");
+        console.log("Supabase not configured. Using Mock Mode.");
         generateMockAnalytics(monthStr, staffId);
         return;
     }
@@ -109,20 +109,23 @@ async function loadAnalyticsData() {
         let query = supabaseClient
             .from('visits')
             .select(`*, staffs(name)`)
-            .gte('visit_start', startDate)
-            .lte('visit_start', endDate);
+            .gte('time_in', startDate)
+            .lte('time_in', endDate);
 
         if (staffId !== 'all') { query = query.eq('staff_id', staffId); }
 
         const { data: visits, error } = await query;
         if (error) throw error;
 
-        processAndRenderCharts(visits, monthStr);
+        processAndRenderCharts(visits || [], monthStr);
 
         // Fetch alerts (out of bounds, mock, etc)
         // For simplicity in this demo, we assume the `gps_logs` table has this, or we just show a static summary 
         // Note: Querying full month of GPS logs might be slow, usually doing this via an aggregated DB view is better.
         // We will fetch a subset or use mock numbers for alerts if real data isn't easily aggregated without a proper RPC.
+        document.getElementById('alert-out-of-bounds').innerText = 0;
+        document.getElementById('alert-offline').innerText = 0;
+        document.getElementById('alert-mock').innerText = 0;
 
     } catch (err) {
         console.error("Analytics Load Error:", err);
@@ -147,14 +150,16 @@ function processAndRenderCharts(visits, monthStr) {
     }
 
     visits.forEach(v => {
-        // Types & Duration
+        // Types & Duration (Mapping the real DB schema 'duration_mins')
         if (v.visit_type === 'Real Visit') realVisits++;
         if (v.visit_type === 'Drive-by') driveBys++;
-        if (v.duration_minutes) totalDurationMin += v.duration_minutes;
+        if (v.duration_mins) totalDurationMin += v.duration_mins;
 
         // By Day
-        const day = new Date(v.visit_start).getDate();
-        visitsByDay[day]++;
+        const day = new Date(v.time_in).getDate();
+        if (day >= 1 && day <= daysInMonth) {
+            visitsByDay[day]++;
+        }
 
         // By Staff
         const sName = v.staffs ? v.staffs.name : v.staff_id;
