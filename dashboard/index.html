@@ -285,11 +285,10 @@
         <div class="flex flex-col gap-6 animate-fade-in-up delay-200">
 
             <!-- Expanded Full Width Map Section -->
-            <div
-                class="bg-white p-2 sm:p-3 rounded-2xl shadow-md border border-slate-200 relative w-full flex flex-col">
+            <div class="bg-white p-2 sm:p-3 rounded-2xl shadow-md border border-slate-200 w-full flex flex-col">
 
-                <div class="relative rounded-xl overflow-hidden border border-slate-200 w-full flex-grow"
-                    style="min-height: 500px;">
+                <div class="relative rounded-xl overflow-hidden border border-slate-200 w-full"
+                    style="height: 65vh; min-height: 500px;">
 
                     <!-- Real-time Status Badge (Top Right) -->
                     <div
@@ -361,7 +360,7 @@
                 </div>
 
                 <!-- The Actual Map Container -->
-                <div id="map" class="w-full h-[70vh] min-h-[500px] z-10 border-b border-slate-200"></div>
+                <div id="map" class="absolute inset-0 w-full h-full z-10 bg-slate-100"></div>
             </div>
 
             <!-- Full Width Time Slider (Moved from floating panel) -->
