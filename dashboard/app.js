@@ -302,23 +302,23 @@ async function loadLatestStaffLocations() {
 
     let activeStaffs = staffs || [];
 
-    // Auto-discover staffs from gps_logs if staffs table is empty (RLS blocked or no data)
-    if (activeStaffs.length === 0) {
-        console.log("No staffs found, attempting auto-discovery from gps_logs...");
-        const { data: recentLogs } = await supabaseClient
-            .from('gps_logs')
-            .select('staff_id')
-            .order('timestamp', { ascending: false })
-            .limit(100);
+    // ALWAYS Auto-discover staffs from recent gps_logs to ensure we don't miss new phones
+    console.log("Checking recent gps_logs for unregistered staffs...");
+    const { data: recentLogs } = await supabaseClient
+        .from('gps_logs')
+        .select('staff_id')
+        .order('timestamp', { ascending: false })
+        .limit(200);
 
-        if (recentLogs && recentLogs.length > 0) {
-            const uniqueIds = [...new Set(recentLogs.map(log => log.staff_id))].filter(Boolean);
-            activeStaffs = uniqueIds.map((id, index) => {
+    if (recentLogs && recentLogs.length > 0) {
+        const uniqueIds = [...new Set(recentLogs.map(log => log.staff_id))].filter(Boolean);
+        uniqueIds.forEach(id => {
+            if (!activeStaffs.find(s => s.id === id)) {
+                console.log("Auto-discovered unregistered staff:", id);
                 const colors = ['blue', 'orange', 'purple', 'teal', 'amber'];
-                return { id: id, name: id, color: colors[index % colors.length] };
-            });
-            console.log("Auto-discovered staffs:", activeStaffs);
-        }
+                activeStaffs.push({ id: id, name: id, color: colors[activeStaffs.length % colors.length] });
+            }
+        });
     }
 
     allStaffs = activeStaffs;
@@ -380,7 +380,7 @@ function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
     // Geofencing Check
     let isOutOfBounds = false;
     let outOfBoundsHtml = '';
-    
+
     // The backend PostGIS trigger already calculates in_territory for every gps log.
     // If it is explicitly false, they are out of bounds. If true or null, they are fine.
     if (logData.in_territory === false) {
