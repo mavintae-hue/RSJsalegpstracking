@@ -267,9 +267,9 @@ function updateFilterCheckboxes() {
         const color = colors[index % colors.length];
 
         const html = `
-            <label class="cursor-pointer inline-flex items-center select-none hover:-translate-y-0.5 transition-transform">
+            <label class="cursor-pointer inline-flex items-center select-none hover:-translate-y-0.5 transition-transform w-full">
                 <input type="checkbox" value="${staff.id}" class="route-filter filter-checkbox hidden" checked onchange="updateMapFiltersWithHistory()">
-                <span class="filter-label px-2 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-300 flex items-center shadow-sm">
+                <span class="filter-label w-full justify-center px-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-300 flex items-center shadow-sm">
                     <span class="w-2 h-2 rounded-full bg-${color.split('-')[0]}-600 mr-1"></span> ${staff.id}
                 </span>
             </label>
@@ -278,7 +278,50 @@ function updateFilterCheckboxes() {
     });
 
     // Also populate the visit table staff filter dropdown
-    populateVisitStaffFilter();
+    if (typeof populateVisitStaffFilter === 'function') populateVisitStaffFilter();
+}
+
+window.toggleAllFilters = function () {
+    const checkboxes = document.querySelectorAll('.route-filter');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+    updateMapFiltersWithHistory();
+};
+
+function updateOfflineStaffUI(latestLogsMap, targetTimeMs) {
+    const container = document.getElementById('offline-staff-container');
+    if (!container) return;
+
+    const offlineStaffs = [];
+
+    // Filter checked staff IDs only, or all if none checked
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    allStaffs.forEach(staff => {
+        // Skip if staff is filtered out by the user checkboxes
+        if (checkedStaffIds.size > 0 && !checkedStaffIds.has(staff.id)) return;
+
+        const log = latestLogsMap[staff.id];
+        // If no log at all, or older than 30 minutes relative to the target time
+        if (!log) {
+            offlineStaffs.push(staff.id);
+        } else {
+            const logTime = new Date(log.timestamp).getTime();
+            if (targetTimeMs - logTime > 30 * 60 * 1000) {
+                offlineStaffs.push(staff.id);
+            }
+        }
+    });
+
+    if (offlineStaffs.length === 0) {
+        container.innerHTML = `<span class="text-[10px] text-emerald-600 font-medium"><i class="ph-bold ph-check-circle mr-1"></i> ทุกสายที่เลือกมีข้อมูลครบ</span>`;
+    } else {
+        container.innerHTML = offlineStaffs.map(id =>
+            `<span class="bg-rose-50 border border-rose-200 text-rose-700 px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm">${id}</span>`
+        ).join('');
+    }
 }
 
 function updateMapFiltersDB() {
@@ -331,6 +374,8 @@ async function loadLatestStaffLocations() {
 
     let allBounds = [];
 
+    const liveLogsMap = {};
+
     for (const staff of allStaffs) {
         const { data: logs, error: logErr } = await supabaseClient
             .from('gps_logs')
@@ -342,6 +387,7 @@ async function loadLatestStaffLocations() {
         let latestLog = logs && logs.length > 0 ? logs[0] : null;
 
         if (latestLog && latestLog.lat && latestLog.lng) {
+            liveLogsMap[staff.id] = latestLog;
             updateMarkerUI(staff, latestLog);
             allBounds.push([latestLog.lat, latestLog.lng]);
             if (latestLog.speed > 0) stats.driving++;
@@ -355,6 +401,7 @@ async function loadLatestStaffLocations() {
     }
 
     updateStatsUI();
+    updateOfflineStaffUI(liveLogsMap, new Date().getTime());
 }
 
 function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
@@ -661,6 +708,8 @@ function scrubTimeHistory() {
             updateMarkerUI(staff, logData, true); // true = force history style
         }
     }
+
+    updateOfflineStaffUI(latestLogsPerStaff, targetTime);
 }
 
 // When staff filter checkbox changes, also toggle history path visibility
@@ -676,6 +725,13 @@ function updateMapFiltersWithHistory() {
         if (shouldShow && !map.hasLayer(group)) group.addTo(map);
         if (!shouldShow && map.hasLayer(group)) map.removeLayer(group);
     });
+
+    // Rerender offline UI if we are in history playback, or live
+    if (isHistoricalPlayback) {
+        scrubTimeHistory(); // Will re-evaluate offline UI with scrub time
+    } else {
+        loadLatestStaffLocations(); // Reweigh live statuses
+    }
 }
 
 async function calculateTodayDistance() {
