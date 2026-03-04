@@ -69,6 +69,31 @@ function initMap() {
 // Per-staff daily distance cache: { staffId: kmTotal }
 let dailyKmByStaff = {};
 
+// Helper: Fetch all logs using pagination to bypass Supabase 1000-row limit
+async function fetchLogsPaginated(startDate, endDate, selectFields = '*', staffId = null) {
+    let allLogs = [];
+    let start = 0;
+    const PAGE_SIZE = 1000;
+    while (true) {
+        let q = supabaseClient.from('gps_logs').select(selectFields)
+            .gte('timestamp', startDate)
+            .lte('timestamp', endDate)
+            .order('timestamp', { ascending: true })
+            .range(start, start + PAGE_SIZE - 1);
+        if (staffId) q = q.eq('staff_id', staffId);
+
+        const { data, error } = await q;
+        if (error) {
+            console.error('Pagination fetch error:', error);
+            break;
+        }
+        if (data) allLogs = allLogs.concat(data);
+        if (!data || data.length < PAGE_SIZE) break;
+        start += PAGE_SIZE;
+    }
+    return allLogs;
+}
+
 async function loadCustomers() {
     if (!supabaseClient) return;
 
@@ -564,16 +589,7 @@ async function updatePathHistory() {
     }
 
     // Fetch GPS logs within the full day for slider to work perfectly
-    const { data: fullDayLogs, error } = await supabaseClient
-        .from('gps_logs')
-        .select('staff_id, lat, lng, timestamp, speed, battery, is_mock')
-        .gte('timestamp', dayStart)
-        .lte('timestamp', dayEnd)
-        .order('timestamp', { ascending: true });
-
-    if (error) { console.error('Error loading history path:', error); return; }
-
-    dailyGpsLogs = fullDayLogs || [];
+    dailyGpsLogs = await fetchLogsPaginated(dayStart, dayEnd, 'staff_id, lat, lng, timestamp, speed, battery, is_mock');
 
     // Filter to exactly what the user selected to draw the path line
     const logs = dailyGpsLogs.filter(log => new Date(log.timestamp) >= new Date(rangeStart));
@@ -740,14 +756,9 @@ async function calculateTodayDistance() {
     const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
     const today = new Date().toLocaleString('sv-SE', options).split(' ')[0];
 
-    const { data: logs, error } = await supabaseClient
-        .from('gps_logs')
-        .select('staff_id, lat, lng, timestamp')
-        .gte('timestamp', `${today}T00:00:00+07:00`)
-        .lte('timestamp', `${today}T23:59:59+07:00`)
-        .order('timestamp', { ascending: true });
+    const logs = await fetchLogsPaginated(`${today}T00:00:00+07:00`, `${today}T23:59:59+07:00`, 'staff_id, lat, lng, timestamp');
 
-    if (error || !logs) return;
+    if (!logs) return;
     if (logs.length < 2) {
         const el = document.getElementById('stat-distance-today');
         if (el) el.textContent = '0';
@@ -1011,13 +1022,7 @@ async function loadTableData() {
         const dateStr = startDate || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
         const kmCache = {};
         await Promise.all(staffIdsInView.map(async sid => {
-            const { data: logs } = await supabaseClient
-                .from('gps_logs')
-                .select('lat, lng, timestamp')
-                .eq('staff_id', sid)
-                .gte('timestamp', `${dateStr}T00:00:00+07:00`)
-                .lte('timestamp', `${dateStr}T23:59:59+07:00`)
-                .order('timestamp', { ascending: true });
+            const logs = await fetchLogsPaginated(`${dateStr}T00:00:00+07:00`, `${dateStr}T23:59:59+07:00`, 'lat, lng, timestamp', sid);
             let km = 0, prev = null;
             (logs || []).forEach(log => {
                 if (!log.lat || !log.lng) return;
