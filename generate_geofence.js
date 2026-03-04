@@ -31,6 +31,12 @@ async function generateTerritories() {
         if (!c.staff_id || c.lat == null || c.lng == null) return;
         if (Math.abs(c.lat) < 0.1 && Math.abs(c.lng) < 0.1) return; // Ignore 0,0 or near 0,0
 
+        // Sanity check: Ensure coordinates are roughly within Thailand bounds
+        // Thailand Lat is ~5 to 21, Lng is ~97 to 106
+        if (c.lat < 5 || c.lat > 21 || c.lng < 97 || c.lng > 106) {
+            return; // Skip invalid coordinates (e.g. Lat = 100 swapped by mistake)
+        }
+
         if (!storesByStaff[c.staff_id]) storesByStaff[c.staff_id] = [];
         storesByStaff[c.staff_id].push({ lat: c.lat, lng: c.lng });
     });
