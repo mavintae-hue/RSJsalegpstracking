@@ -27,7 +27,10 @@ async function generateTerritories() {
     // Group by staff_id
     const storesByStaff = {};
     allCusts.forEach(c => {
-        if (!c.staff_id || !c.lat || !c.lng) return;
+        // Filter out nulls, undefined, and exact 0,0 coordinates
+        if (!c.staff_id || c.lat == null || c.lng == null) return;
+        if (Math.abs(c.lat) < 0.1 && Math.abs(c.lng) < 0.1) return; // Ignore 0,0 or near 0,0
+
         if (!storesByStaff[c.staff_id]) storesByStaff[c.staff_id] = [];
         storesByStaff[c.staff_id].push({ lat: c.lat, lng: c.lng });
     });
