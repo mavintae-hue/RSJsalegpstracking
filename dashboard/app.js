@@ -186,22 +186,9 @@ async function loadCustomers() {
     };
 
     // Draw bounding-box territory rectangle per staff_id (from their store coordinates)
-    Object.entries(storesByStaff).forEach(([staffId, points]) => {
-        if (points.length < 2) return;
-        const lats = points.map(p => p[0]);
-        const lngs = points.map(p => p[1]);
-        const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-        const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-        const color = staffColorMap[staffId] || '#64748b';
-
-        const polygon = L.rectangle([[minLat, minLng], [maxLat, maxLng]], {
-            color, weight: 2, opacity: 0.7,
-            fillColor: color, fillOpacity: 0.04, dashArray: '5 6'
-        }).bindPopup(`<b>เขตสาย ${staffId}</b><br><span class="text-[10px] text-slate-500">${points.length} ร้านค้า</span>`)
-            .addTo(map);
-
-        territoryPolygons.push(polygon);
-    });
+    // Removed local auto-drawing, we will rely on DB territories instead
+    // loadTerritories() handles drawing the assigned bounds now.
+    setTimeout(loadTerritories, 500); // Call after map settles
 }
 
 function setDefaultDates() {
@@ -217,38 +204,62 @@ function setDefaultDates() {
     if (reportEndDateInput) reportEndDateInput.value = today;
 }
 
-let turfTerritories = {}; // Stores Turf.js features for bounds checking
-
 async function loadTerritories() {
-    const { data, error } = await supabaseClient
-        .from('territories_geojson')
-        .select('*');
+    // Left join: Territories -> Staff Mapping
+    const { data: mappings, error } = await supabaseClient
+        .from('staff_territories')
+        .select(`
+            staff_id,
+            territory:territories (
+                name,
+                geojson
+            )
+        `);
 
     if (error) {
-        // Silently fail if view is not set up
         console.warn('Could not load territories:', error);
         return;
     }
 
+    // Remove old polygons
     territoryPolygons.forEach(p => map.removeLayer(p));
     territoryPolygons = [];
-    turfTerritories = {};
 
-    data.forEach(t => {
-        if (t.geojson) {
-            const geojson = typeof t.geojson === 'string' ? JSON.parse(t.geojson) : t.geojson;
-            try {
-                // Save for point-in-polygon math
-                turfTerritories[t.name] = turf.feature(geojson);
-            } catch (e) { console.error("Invalid Turf geojson for", t.name, e); }
+    // Same color mapping as markers
+    const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#10b981', '#6366f1'];
+    const staffColorMap = {};
+    if (allStaffs && allStaffs.length) {
+        allStaffs.forEach((s, idx) => staffColorMap[s.id] = staffColors[idx % staffColors.length]);
+    }
 
-            const polygon = L.geoJSON(geojson, {
-                style: {
-                    color: '#f97316', weight: 2, opacity: 0.9, fillColor: '#f97316', fillOpacity: 0.08, dashArray: '4, 6'
-                }
-            }).bindPopup(`<strong>เขต: ${t.name}</strong>`).addTo(map);
-            territoryPolygons.push(polygon);
+    mappings.forEach(m => {
+        if (!m.territory || !m.territory.geojson) return;
+
+        let geojsonObj = m.territory.geojson;
+        if (typeof geojsonObj === 'string') {
+            try { geojsonObj = JSON.parse(geojsonObj); } catch (e) { return; }
         }
+
+        const staffId = m.staff_id;
+        // Assign a color or fallback
+        if (!staffColorMap[staffId]) {
+            staffColorMap[staffId] = staffColors[Object.keys(staffColorMap).length % staffColors.length];
+        }
+        const color = staffColorMap[staffId];
+
+        // Draw Polygon
+        const polygonLayer = L.geoJSON(geojsonObj, {
+            style: {
+                color: color,
+                weight: 2,
+                opacity: 0.8,
+                fillColor: color,
+                fillOpacity: 0.05,
+                dashArray: '5, 8'
+            }
+        }).bindPopup(`<div class="font-prompt text-center"><b>พื้นที่โซน ${staffId}</b></div>`).addTo(map);
+
+        territoryPolygons.push(polygonLayer);
     });
 }
 
