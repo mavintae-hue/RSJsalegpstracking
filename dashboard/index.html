@@ -322,14 +322,19 @@
 
                             <!-- Date Range Filters -->
                             <div class="flex flex-col gap-2">
-                                <span class="text-[11px] font-bold text-slate-700 flex items-center uppercase tracking-wider mb-1"><i class="ph-bold ph-calendar-blank mr-1.5 text-blue-500"></i> เลือกช่วงเวลา (ย้อนหลัง)</span>
-                                
-                                <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
+                                <span
+                                    class="text-[11px] font-bold text-slate-700 flex items-center uppercase tracking-wider mb-1"><i
+                                        class="ph-bold ph-calendar-blank mr-1.5 text-blue-500"></i> เลือกช่วงเวลา
+                                    (ย้อนหลัง)</span>
+
+                                <div
+                                    class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
                                     <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">เริ่ม</div>
                                     <input type="datetime-local" id="history-start-date" onchange="updatePathHistory()"
                                         class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
-                                <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner mt-1">
+                                <div
+                                    class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner mt-1">
                                     <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">ถึง</div>
                                     <input type="datetime-local" id="history-end-date" onchange="updatePathHistory()"
                                         class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
@@ -373,7 +378,14 @@
                             style="accent-color: #2563eb;">
                         <span class="text-xs font-bold text-slate-400">23:59</span>
                     </div>
-                    <div class="w-full md:w-auto shrink-0 flex justify-end">
+                    <div class="w-full md:w-auto shrink-0 flex justify-end gap-3">
+                        <label
+                            class="flex items-center space-x-2 cursor-pointer bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm">
+                            <input type="checkbox" id="hide-territory-cx" onchange="toggleTerritories()"
+                                class="rounded focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                style="accent-color: #f97316;">
+                            <span class="text-xs font-bold text-slate-700">ซ่อนเขต</span>
+                        </label>
                         <label
                             class="flex items-center space-x-2 cursor-pointer bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm">
                             <input type="checkbox" id="hide-unvisited-cx" onchange="toggleUnvisitedStores()"

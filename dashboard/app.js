@@ -263,7 +263,23 @@ async function loadTerritories() {
 
         territoryPolygons.push(polygonLayer);
     });
+
+    // Apply visibility state immediately upon load if checkbox exists
+    if (typeof window.toggleTerritories === 'function') {
+        window.toggleTerritories();
+    }
 }
+
+window.toggleTerritories = function () {
+    const hideTerritories = document.getElementById('hide-territory-cx')?.checked;
+    territoryPolygons.forEach(p => {
+        if (hideTerritories) {
+            if (map.hasLayer(p)) map.removeLayer(p);
+        } else {
+            if (!map.hasLayer(p)) p.addTo(map);
+        }
+    });
+};
 
 // Custom sophisticated icon for staff
 function createStaffIcon(route, colorName, isOutOfBounds = false, isOffline = false) {
@@ -614,6 +630,17 @@ async function updatePathHistory() {
     document.querySelector('#time-slider').previousElementSibling.textContent = startStr;
     document.querySelector('#time-slider').nextElementSibling.textContent = endStr;
     document.getElementById('slider-time-display').textContent = 'ล่าสุดในรอบที่เลือก';
+
+    // Sync report parameters for Table Data so they pull the same dynamic range
+    const reportStartInput = document.getElementById('report-start-date');
+    const reportEndInput = document.getElementById('report-end-date');
+    if (reportStartInput) reportStartInput.value = startInput.split('T')[0];
+    if (reportEndInput) reportEndInput.value = endInput.split('T')[0];
+
+    // Auto-refresh the datatable with the newly synced dates
+    if (typeof window.loadTableData === 'function') {
+        window.loadTableData();
+    }
 
     // Fetch GPS logs within the requested range
     dailyGpsLogs = await fetchLogsPaginated(tStart, tEnd, 'staff_id, lat, lng, timestamp, speed, battery, is_mock');
