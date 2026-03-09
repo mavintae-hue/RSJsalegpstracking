@@ -765,7 +765,7 @@ function scrubTimeHistory() {
     const latestLogsPerStaff = {};
     for (const log of dailyGpsLogs) {
         const logTime = new Date(log.timestamp).getTime();
-        if (logTime <= targetTime) {
+        if (logTime <= targetTimeMs) {
             // Overwrite earlier logs with newer ones (since array is ascending order already)
             latestLogsPerStaff[log.staff_id] = log;
         }
@@ -788,7 +788,7 @@ function scrubTimeHistory() {
         }
     }
 
-    updateOfflineStaffUI(latestLogsPerStaff, targetTime);
+    updateOfflineStaffUI(latestLogsPerStaff, targetTimeMs);
 }
 
 // When staff filter checkbox changes, also toggle history path visibility
