@@ -309,8 +309,12 @@
                                     <span
                                         class="text-[11px] font-bold text-slate-700 flex items-center uppercase tracking-wider"><i
                                             class="ph-fill ph-funnel mr-1.5 text-blue-500"></i> เลือกสายวิ่ง</span>
-                                    <button onclick="toggleAllFilters()"
-                                        class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-medium transition-colors border border-slate-200 shadow-sm">สลับทั้งหมด</button>
+                                    <div class="flex gap-1">
+                                        <button onclick="setAllFilters(true)"
+                                            class="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 px-2 py-0.5 rounded font-medium transition-colors border border-blue-200 shadow-sm">เปิดเปิด</button>
+                                        <button onclick="setAllFilters(false)"
+                                            class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 py-0.5 rounded font-medium transition-colors border border-rose-200 shadow-sm">ปิดทั้งหมด</button>
+                                    </div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto pr-1"
                                     id="filter-container">
@@ -330,13 +334,13 @@
                                 <div
                                     class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
                                     <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">เริ่ม</div>
-                                    <input type="datetime-local" id="history-start-date" onchange="updatePathHistory()"
+                                    <input type="date" id="history-start-date" onchange="updatePathHistory()"
                                         class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
                                 <div
                                     class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner mt-1">
                                     <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">ถึง</div>
-                                    <input type="datetime-local" id="history-end-date" onchange="updatePathHistory()"
+                                    <input type="date" id="history-end-date" onchange="updatePathHistory()"
                                         class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
                             </div>

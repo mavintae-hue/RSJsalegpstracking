@@ -200,8 +200,8 @@ function setDefaultDates() {
     const reportStartDateInput = document.getElementById('report-start-date');
     const reportEndDateInput = document.getElementById('report-end-date');
 
-    if (historyStartInput) historyStartInput.value = `${today}T00:00`;
-    if (historyEndInput) historyEndInput.value = `${today}T23:59`;
+    if (historyStartInput) historyStartInput.value = today;
+    if (historyEndInput) historyEndInput.value = today;
     if (reportStartDateInput) reportStartDateInput.value = today;
     if (reportEndDateInput) reportEndDateInput.value = today;
 }
@@ -335,10 +335,9 @@ function updateFilterCheckboxes() {
     if (typeof populateVisitStaffFilter === 'function') populateVisitStaffFilter();
 }
 
-window.toggleAllFilters = function () {
+window.setAllFilters = function (state) {
     const checkboxes = document.querySelectorAll('.route-filter');
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-    checkboxes.forEach(cb => cb.checked = !allChecked);
+    checkboxes.forEach(cb => cb.checked = state);
     updateMapFiltersWithHistory();
 };
 
@@ -417,6 +416,9 @@ async function loadLatestStaffLocations() {
             }
         });
     }
+
+    // Sort staff alphabetically by ID so the filter panel is organized
+    activeStaffs.sort((a, b) => a.id.localeCompare(b.id));
 
     allStaffs = activeStaffs;
     updateFilterCheckboxes();
@@ -602,8 +604,9 @@ async function updatePathHistory() {
 
     if (!startInput || !endInput) return;
 
-    const startDateTime = new Date(startInput);
-    const endDateTime = new Date(endInput);
+    // Calculate end of day for the end date correctly
+    const startDateTime = new Date(`${startInput}T00:00:00+07:00`);
+    const endDateTime = new Date(`${endInput}T23:59:59+07:00`);
 
     if (startDateTime > endDateTime) {
         alert("วันสิ้นสุดต้องมากกว่าวันเริ่มต้น");
@@ -611,9 +614,8 @@ async function updatePathHistory() {
     }
 
     // Format for Supabase query based on local time
-    // Adding seconds and timezone offset for Thai time manually if missing
-    const tStart = startInput.includes('+') ? startInput : `${startInput}:00+07:00`;
-    const tEnd = endInput.includes('+') ? endInput : `${endInput}:59+07:00`;
+    const tStart = `${startInput}T00:00:00+07:00`;
+    const tEnd = `${endInput}T23:59:59+07:00`;
 
     // Calculate total minutes between dates
     const diffMs = endDateTime - startDateTime;
@@ -735,8 +737,8 @@ function scrubTimeHistory() {
 
     isHistoricalPlayback = true;
 
-    // Calculate the target time by shifting the base start time
-    const startDateTime = new Date(startInput);
+    // Reconstruct start date at 00:00 as base time for adding minutes
+    const startDateTime = new Date(`${startInput}T00:00:00+07:00`);
     const targetDateTime = new Date(startDateTime.getTime() + minsOffset * 60000);
 
     // Format display output e.g "12 มิ.ย. - 14:30 น."
