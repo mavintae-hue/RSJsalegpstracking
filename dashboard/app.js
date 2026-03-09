@@ -195,11 +195,13 @@ function setDefaultDates() {
     // Force date to be computed in Thailand timezone (Asia/Bangkok)
     const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
     const today = new Date().toLocaleString('sv-SE', options).split(' ')[0]; // Returns YYYY-MM-DD
-    const historyDateInput = document.getElementById('history-date');
+    const historyStartInput = document.getElementById('history-start-date');
+    const historyEndInput = document.getElementById('history-end-date');
     const reportStartDateInput = document.getElementById('report-start-date');
     const reportEndDateInput = document.getElementById('report-end-date');
 
-    if (historyDateInput) historyDateInput.value = today;
+    if (historyStartInput) historyStartInput.value = `${today}T00:00`;
+    if (historyEndInput) historyEndInput.value = `${today}T23:59`;
     if (reportStartDateInput) reportStartDateInput.value = today;
     if (reportEndDateInput) reportEndDateInput.value = today;
 }
@@ -573,39 +575,51 @@ function haversineKm(lat1, lng1, lat2, lng2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Global variable to store current slider max minutes
+let sliderMaxMinutes = 1440;
+
 async function updatePathHistory() {
     if (!supabaseClient) return;
 
-    const selectedDate = document.getElementById('history-date').value; // YYYY-MM-DD
-    const hoursBack = document.getElementById('path-history-select').value; // '1', '3', '6', 'all'
+    const startInput = document.getElementById('history-start-date').value;
+    const endInput = document.getElementById('history-end-date').value;
 
-    if (!selectedDate) return;
+    if (!startInput || !endInput) return;
 
-    // Fetch the FULL day of logs for the time slider cache
-    const dayStart = `${selectedDate}T00:00:00+07:00`;
-    const dayEnd = `${selectedDate}T23:59:59+07:00`;
+    const startDateTime = new Date(startInput);
+    const endDateTime = new Date(endInput);
 
-    // Calculate time range for the path visibility strictly
-    let rangeStart = dayStart;
-    if (hoursBack !== 'all') {
-        const hours = parseInt(hoursBack);
-        const optionsDate = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const todayStr = new Date().toLocaleString('sv-SE', optionsDate).split(' ')[0];
-        if (selectedDate === todayStr) {
-            rangeStart = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-        } else {
-            const endOfDay = new Date(`${selectedDate}T23:59:59+07:00`);
-            rangeStart = new Date(endOfDay - hours * 60 * 60 * 1000).toISOString();
-        }
+    if (startDateTime > endDateTime) {
+        alert("วันสิ้นสุดต้องมากกว่าวันเริ่มต้น");
+        return;
     }
 
-    // Fetch GPS logs within the full day for slider to work perfectly
-    dailyGpsLogs = await fetchLogsPaginated(dayStart, dayEnd, 'staff_id, lat, lng, timestamp, speed, battery, is_mock');
+    // Format for Supabase query based on local time
+    // Adding seconds and timezone offset for Thai time manually if missing
+    const tStart = startInput.includes('+') ? startInput : `${startInput}:00+07:00`;
+    const tEnd = endInput.includes('+') ? endInput : `${endInput}:59+07:00`;
 
-    // Filter to exactly what the user selected to draw the path line
-    const logs = dailyGpsLogs.filter(log => new Date(log.timestamp) >= new Date(rangeStart));
+    // Calculate total minutes between dates
+    const diffMs = endDateTime - startDateTime;
+    sliderMaxMinutes = Math.floor(diffMs / 1000 / 60);
 
-    if (error) { console.error('Error loading history path:', error); return; }
+    // Update Slider UI
+    const slider = document.getElementById('time-slider');
+    slider.max = sliderMaxMinutes;
+    slider.value = sliderMaxMinutes; // Default to end of range
+
+    // Update Slider Labels
+    const startStr = startDateTime.toLocaleString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const endStr = endDateTime.toLocaleString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.querySelector('#time-slider').previousElementSibling.textContent = startStr;
+    document.querySelector('#time-slider').nextElementSibling.textContent = endStr;
+    document.getElementById('slider-time-display').textContent = 'ล่าสุดในรอบที่เลือก';
+
+    // Fetch GPS logs within the requested range
+    dailyGpsLogs = await fetchLogsPaginated(tStart, tEnd, 'staff_id, lat, lng, timestamp, speed, battery, is_mock');
+
+    // We already filtered via DB, so logs = dailyGpsLogs
+    const logs = dailyGpsLogs;
 
     // Remove existing history layers
     Object.values(historyPathLayers).forEach(layer => {
@@ -675,34 +689,43 @@ async function updatePathHistory() {
 function scrubTimeHistory() {
     const slider = document.getElementById('time-slider');
     const display = document.getElementById('slider-time-display');
-    const selectedDate = document.getElementById('history-date').value;
-    const mins = parseInt(slider.value, 10);
+    const startInput = document.getElementById('history-start-date').value;
+    const minsOffset = parseInt(slider.value, 10);
 
-    if (mins >= 1440) {
+    if (!startInput) return;
+
+    if (minsOffset >= sliderMaxMinutes && new Date(startInput).toDateString() === new Date().toDateString()) {
         display.textContent = 'ปัจจุบัน (Real-time)';
         display.className = 'ml-2 font-mono bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 rounded shadow-sm font-bold text-xs';
 
         // If returning from playback, reload normal live map state
         if (isHistoricalPlayback) {
             isHistoricalPlayback = false;
-            loadMapData();
+            loadMapData(); // Trigger full refresh to live
         }
         return;
     }
 
     isHistoricalPlayback = true;
 
-    // Format minutes to HH:MM
-    const h = Math.floor(mins / 60).toString().padStart(2, '0');
-    const m = (mins % 60).toString().padStart(2, '0');
-    display.textContent = `${h}:${m} น.`;
+    // Calculate the target time by shifting the base start time
+    const startDateTime = new Date(startInput);
+    const targetDateTime = new Date(startDateTime.getTime() + minsOffset * 60000);
+
+    // Format display output e.g "12 มิ.ย. - 14:30 น."
+    const formattedDisplay = targetDateTime.toLocaleString('th-TH', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    display.textContent = formattedDisplay + " น.";
     display.className = 'ml-2 font-mono bg-orange-100 border border-orange-200 text-orange-800 px-2 py-0.5 rounded shadow-sm font-bold text-xs';
 
     if (!dailyGpsLogs.length) return;
 
-    // Create the target exact Date time object
-    const targetDateStr = `${selectedDate}T${h}:${m}:00+07:00`;
-    const targetTime = new Date(targetDateStr).getTime();
+    const targetTimeMs = targetDateTime.getTime();
 
     // Checked staff filters
     const checkedStaffIds = new Set(

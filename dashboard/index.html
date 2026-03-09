@@ -320,26 +320,19 @@
 
                             <div class="w-full h-px bg-slate-100"></div>
 
-                            <!-- Date & Time Filters -->
+                            <!-- Date Range Filters -->
                             <div class="flex flex-col gap-2">
-                                <div
-                                    class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
-                                    <div class="px-2 text-slate-400"><i class="ph-bold ph-calendar-blank text-sm"></i>
-                                    </div>
-                                    <input type="date" id="history-date" onchange="updatePathHistory()"
-                                        class="bg-transparent text-slate-700 text-xs font-semibold focus:outline-none p-1.5 cursor-pointer w-full">
+                                <span class="text-[11px] font-bold text-slate-700 flex items-center uppercase tracking-wider mb-1"><i class="ph-bold ph-calendar-blank mr-1.5 text-blue-500"></i> เลือกช่วงเวลา (ย้อนหลัง)</span>
+                                
+                                <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
+                                    <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">เริ่ม</div>
+                                    <input type="datetime-local" id="history-start-date" onchange="updatePathHistory()"
+                                        class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
-                                <div
-                                    class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
-                                    <div class="px-2 text-slate-400"><i
-                                            class="ph-bold ph-clock-counter-clockwise text-sm"></i></div>
-                                    <select id="path-history-select" onchange="updatePathHistory()"
-                                        class="bg-transparent text-slate-700 text-xs font-semibold focus:outline-none p-1.5 cursor-pointer pr-2 w-full appearance-none">
-                                        <option value="1">ย้อน 1 ชม.</option>
-                                        <option value="3">ย้อน 3 ชม.</option>
-                                        <option value="6">ย้อน 6 ชม.</option>
-                                        <option value="all">ดูทั้งวัน</option>
-                                    </select>
+                                <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner mt-1">
+                                    <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">ถึง</div>
+                                    <input type="datetime-local" id="history-end-date" onchange="updatePathHistory()"
+                                        class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
                             </div>
                         </div>
