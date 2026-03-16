@@ -282,26 +282,39 @@ window.toggleTerritories = function () {
 };
 
 // Custom sophisticated icon for staff
-function createStaffIcon(route, colorName, isOutOfBounds = false, isOffline = false) {
+function createStaffIcon(route, colorName, isOutOfBounds = false, status = 'online') {
     const colorMap = {
         blue: { bg: 'bg-blue-600', text: 'text-blue-600' },
         orange: { bg: 'bg-orange-500', text: 'text-orange-500' },
-        purple: { bg: 'bg-purple-600', text: 'text-purple-600' }
+        purple: { bg: 'bg-purple-600', text: 'text-purple-600' },
+        teal: { bg: 'bg-teal-500', text: 'text-teal-500' },
+        amber: { bg: 'bg-amber-600', text: 'text-amber-600' }
     };
 
     let c = colorMap[colorName] || colorMap.blue;
-    if (isOffline) c = { bg: 'bg-slate-500', text: 'text-slate-400' };
-    if (isOutOfBounds && !isOffline) c = { bg: 'bg-rose-600', text: 'text-rose-600' };
+    let fallbackText = c.text;
+    
+    // Status colors
+    if (status === 'offline') c = { bg: 'bg-slate-500', text: 'text-slate-400' };
+    else if (status === 'idle') c = { bg: c.bg, text: 'text-amber-500' }; // Use the staff's bg color but make icon amber
+    
+    if (isOutOfBounds && status !== 'offline') c = { bg: 'bg-rose-600', text: 'text-rose-600' };
 
-    const extraClass = (isOutOfBounds && !isOffline) ? 'out-of-bounds-glow animate-pulse' : '';
+    const extraClass = (isOutOfBounds && status !== 'offline') ? 'out-of-bounds-glow animate-pulse' : '';
     const bounceIcon = isOutOfBounds ? '<div class="absolute -top-5 text-rose-500 text-xl animate-bounce drop-shadow-md"><i class="ph-fill ph-warning"></i></div>' : '';
-    const offlineIcon = isOffline ? '<div class="absolute -top-4 -right-2 text-slate-600 bg-white rounded-full p-0.5 text-xs border border-slate-300 shadow-sm"><i class="ph-bold ph-wifi-slash"></i></div>' : '';
+    
+    let statusIcon = '';
+    if (status === 'offline') {
+        statusIcon = '<div class="absolute -top-4 -right-2 text-slate-600 bg-white rounded-full p-0.5 text-xs border border-slate-300 shadow-sm"><i class="ph-bold ph-wifi-slash"></i></div>';
+    } else if (status === 'idle') {
+        statusIcon = '<div class="absolute -top-4 -right-2 text-amber-600 bg-white rounded-full p-0.5 text-xs border border-amber-300 shadow-sm"><i class="ph-bold ph-coffee"></i></div>';
+    }
 
     return L.divIcon({
         html: `
             <div class="relative flex flex-col items-center justify-center ${extraClass} transition-transform hover:scale-110">
                 ${bounceIcon}
-                ${offlineIcon}
+                ${statusIcon}
                 <div class="${c.bg} text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-md whitespace-nowrap border-2 border-white z-10">
                     ${route}
                 </div>
@@ -460,7 +473,7 @@ async function loadLatestStaffLocations() {
     updateOfflineStaffUI(liveLogsMap, new Date().getTime());
 }
 
-function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
+function updateMarkerUI(staff, logData, forceHistoryStyle = false, referenceTimeMs = Date.now()) {
     const latLng = [logData.lat, logData.lng];
 
     // Check if layer group exists
@@ -470,14 +483,41 @@ function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
     const group = staffMapLayers[staff.id];
     group.clearLayers(); // Remove old marker
 
-    const isOffline = forceHistoryStyle ? false : (new Date() - new Date(logData.timestamp)) > 5 * 60 * 1000;
+    const logTimeMs = new Date(logData.timestamp).getTime();
+    const timeDiffMs = referenceTimeMs - logTimeMs;
+    
+    let status = 'online';
+    if (timeDiffMs > 20 * 60 * 1000) {
+        status = 'offline';
+    } else if (timeDiffMs > 5 * 60 * 1000) {
+        status = 'idle';
+    }
+
     const isMock = logData.is_mock;
     const speed = logData.speed || ((logData.is_history || forceHistoryStyle) ? '-' : 0);
     const battery = logData.battery || '--';
     const batColor = battery <= 20 ? 'text-rose-600' : 'text-emerald-600';
     const batIcon = battery <= 20 ? 'battery-warning' : (battery > 80 ? 'battery-high' : 'battery-medium');
-    let offlineText = isOffline ? '<span class="text-slate-400"><i class="ph-bold ph-wifi-slash"></i> Offline</span>' : '<span class="text-blue-500"><i class="ph-bold ph-wifi-high"></i> Online</span>';
-    if (forceHistoryStyle) offlineText = '<span class="text-orange-500"><i class="ph-bold ph-clock-counter-clockwise"></i> อดีต</span>';
+    
+    let offlineText = '';
+    if (forceHistoryStyle) {
+        if (status === 'offline') {
+            offlineText = '<span class="text-slate-400"><i class="ph-bold ph-wifi-slash"></i> อดีต (Offline)</span>';
+        } else if (status === 'idle') {
+            offlineText = '<span class="text-orange-500"><i class="ph-bold ph-coffee"></i> อดีต (จอด/พัก)</span>';
+        } else {
+            offlineText = '<span class="text-blue-500"><i class="ph-bold ph-clock-counter-clockwise"></i> อดีต (Online)</span>';
+        }
+    } else {
+        if (status === 'offline') {
+            offlineText = '<span class="text-slate-400"><i class="ph-bold ph-wifi-slash"></i> Offline</span>';
+        } else if (status === 'idle') {
+            offlineText = '<span class="text-amber-500"><i class="ph-bold ph-coffee"></i> จอด/พัก</span>';
+        } else {
+            offlineText = '<span class="text-blue-500"><i class="ph-bold ph-wifi-high"></i> Online</span>';
+        }
+    }
+
     const mockHtml = isMock ? `<div class="mt-1 bg-rose-100 border border-rose-300 text-rose-700 text-[10px] font-bold py-0.5 px-2 rounded animate-pulse"><i class="ph-fill ph-warning"></i>ระวัง! Fake GPS</div>` : '';
 
     // Geofencing Check
@@ -501,7 +541,7 @@ function updateMarkerUI(staff, logData, forceHistoryStyle = false) {
         ${outOfBoundsHtml}
     `;
 
-    const marker = L.marker(latLng, { icon: createStaffIcon(staff.id, staff.color || 'blue', isOutOfBounds, isOffline) })
+    const marker = L.marker(latLng, { icon: createStaffIcon(staff.id, staff.color || 'blue', isOutOfBounds, status) })
         .bindPopup(`
             <div class="text-center min-w-[190px] font-prompt pt-1">
                 <div class="flex items-center justify-center mb-1">
@@ -784,7 +824,7 @@ function scrubTimeHistory() {
             if (!staffMapLayers[staff.id]) {
                 staffMapLayers[staff.id] = L.layerGroup().addTo(map);
             }
-            updateMarkerUI(staff, logData, true); // true = force history style
+            updateMarkerUI(staff, logData, true, targetTimeMs); // true = force history style, targetTimeMs used for idle detection
         }
     }
 
