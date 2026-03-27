@@ -334,13 +334,13 @@
                                 <div
                                     class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner">
                                     <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">เริ่ม</div>
-                                    <input type="date" id="history-start-date" onchange="updatePathHistory()"
+                                    <input type="date" id="history-start-date"
                                         class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
                                 <div
                                     class="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shadow-inner mt-1">
                                     <div class="px-2 text-slate-400 text-[10px] font-bold w-12 text-center">ถึง</div>
-                                    <input type="date" id="history-end-date" onchange="updatePathHistory()"
+                                    <input type="date" id="history-end-date"
                                         class="bg-transparent text-slate-700 text-[11px] font-medium focus:outline-none p-1.5 cursor-pointer w-full">
                                 </div>
                                 <button onclick="updatePathHistory()"
@@ -558,6 +558,23 @@
                             นำเข้าข้อมูลไปยังระบบ
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Popup -->
+        <div id="loading-popup"
+            class="fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-[2px] hidden flex items-center justify-center transition-all duration-300">
+            <div class="bg-white px-6 py-5 rounded-2xl shadow-2xl flex flex-col items-center gap-4 animate-modal-pop border border-slate-100">
+                <div class="relative">
+                    <div class="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i class="ph-bold ph-arrows-clockwise text-blue-600 text-lg"></i>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center">
+                    <p class="text-sm font-bold text-slate-800 tracking-tight" id="loading-text">กำลังโหลดข้อมูล...</p>
+                    <p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-medium">Please wait a moment</p>
                 </div>
             </div>
         </div>

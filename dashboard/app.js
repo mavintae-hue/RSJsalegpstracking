@@ -648,116 +648,141 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 // Global variable to store current slider max minutes
 let sliderMaxMinutes = 1440;
 
+function toggleLoading(show, text = 'กำลังโหลดข้อมูล...') {
+    const popup = document.getElementById('loading-popup');
+    const label = document.getElementById('loading-text');
+    if (!popup) return;
+
+    if (show) {
+        if (label) label.innerText = text;
+        popup.classList.remove('hidden');
+    } else {
+        popup.classList.add('hidden');
+    }
+}
+
 async function updatePathHistory() {
     if (!supabaseClient) return;
 
     const startInput = document.getElementById('history-start-date').value;
     const endInput = document.getElementById('history-end-date').value;
 
-    if (!startInput || !endInput) return;
-
-    // Calculate end of day for the end date correctly
-    const startDateTime = new Date(`${startInput}T00:00:00+07:00`);
-    const endDateTime = new Date(`${endInput}T23:59:59+07:00`);
-
-    if (startDateTime > endDateTime) {
-        alert("วันสิ้นสุดต้องมากกว่าวันเริ่มต้น");
+    if (!startInput || !endInput) {
+        alert("กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด");
         return;
     }
 
-    // Format for Supabase query based on local time
-    const tStart = `${startInput}T00:00:00+07:00`;
-    const tEnd = `${endInput}T23:59:59+07:00`;
+    // Toggle Loading ON
+    toggleLoading(true, 'กำลังโหลดข้อมูลประวัติ...');
 
-    // Calculate total minutes between dates
-    const diffMs = endDateTime - startDateTime;
-    sliderMaxMinutes = Math.floor(diffMs / 1000 / 60);
+    try {
+        // Calculate end of day for the end date correctly
+        const startDateTime = new Date(`${startInput}T00:00:00+07:00`);
+        const endDateTime = new Date(`${endInput}T23:59:59+07:00`);
 
-    // Update Slider UI
-    const slider = document.getElementById('time-slider');
-    slider.max = sliderMaxMinutes;
-    slider.value = sliderMaxMinutes; // Default to end of range
+        if (startDateTime > endDateTime) {
+            alert("วันสิ้นสุดต้องมากกว่าวันเริ่มต้น");
+            return;
+        }
 
-    // Update Slider Labels
-    const startStr = startDateTime.toLocaleString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const endStr = endDateTime.toLocaleString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    document.querySelector('#time-slider').previousElementSibling.textContent = startStr;
-    document.querySelector('#time-slider').nextElementSibling.textContent = endStr;
-    document.getElementById('slider-time-display').textContent = 'ล่าสุดในรอบที่เลือก';
+        // Format for Supabase query based on local time
+        const tStart = `${startInput}T00:00:00+07:00`;
+        const tEnd = `${endInput}T23:59:59+07:00`;
 
-    // Sync report parameters for Table Data so they pull the same dynamic range
-    const reportStartInput = document.getElementById('report-start-date');
-    const reportEndInput = document.getElementById('report-end-date');
-    if (reportStartInput) reportStartInput.value = startInput.split('T')[0];
-    if (reportEndInput) reportEndInput.value = endInput.split('T')[0];
+        // Calculate total minutes between dates
+        const diffMs = endDateTime - startDateTime;
+        sliderMaxMinutes = Math.floor(diffMs / 1000 / 60);
 
-    // Auto-refresh the datatable with the newly synced dates
-    if (typeof window.loadTableData === 'function') {
-        window.loadTableData();
-    }
+        // Update Slider UI
+        const slider = document.getElementById('time-slider');
+        slider.max = sliderMaxMinutes;
+        slider.value = sliderMaxMinutes; // Default to end of range
 
-    // Fetch GPS logs within the requested range
-    dailyGpsLogs = await fetchLogsPaginated(tStart, tEnd, 'staff_id, lat, lng, timestamp, speed, battery, is_mock');
+        // Update Slider Labels
+        const startStr = startDateTime.toLocaleString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const endStr = endDateTime.toLocaleString('th-TH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        document.querySelector('#time-slider').previousElementSibling.textContent = startStr;
+        document.querySelector('#time-slider').nextElementSibling.textContent = endStr;
+        document.getElementById('slider-time-display').textContent = 'ล่าสุดในรอบที่เลือก';
 
-    // We already filtered via DB, so logs = dailyGpsLogs
-    const logs = dailyGpsLogs;
+        // Sync report parameters for Table Data so they pull the same dynamic range
+        const reportStartInput = document.getElementById('report-start-date');
+        const reportEndInput = document.getElementById('report-end-date');
+        if (reportStartInput) reportStartInput.value = startInput.split('T')[0];
+        if (reportEndInput) reportEndInput.value = endInput.split('T')[0];
 
-    // Remove existing history layers
-    Object.values(historyPathLayers).forEach(layer => {
-        if (map.hasLayer(layer)) map.removeLayer(layer);
-    });
-    historyPathLayers = {};
+        // Auto-refresh the datatable with the newly synced dates
+        if (typeof window.loadTableData === 'function') {
+            await window.loadTableData(); // Wait for table load
+        }
 
-    if (!logs || logs.length === 0) return;
+        // Fetch GPS logs within the requested range
+        dailyGpsLogs = await fetchLogsPaginated(tStart, tEnd, 'staff_id, lat, lng, timestamp, speed, battery, is_mock');
 
-    // Get which staff are currently checked in the filter panel
-    const checkedStaffIds = new Set(
-        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
-    );
+        // We already filtered via DB, so logs = dailyGpsLogs
+        const logs = dailyGpsLogs;
 
-    // Group logs by staff_id
-    const staffGroups = {};
-    logs.forEach(log => {
-        if (!log.lat || !log.lng) return;
-        if (!staffGroups[log.staff_id]) staffGroups[log.staff_id] = [];
-        staffGroups[log.staff_id].push([log.lat, log.lng]);
-    });
+        // Remove existing history layers
+        Object.values(historyPathLayers).forEach(layer => {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+        });
+        historyPathLayers = {};
 
-    // Draw dashed polyline + start/end markers per staff
-    Object.entries(staffGroups).forEach(([staffId, coords]) => {
-        if (coords.length < 2) return;
+        if (!logs || logs.length === 0) return;
 
-        const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
-        const color = getStaffColor(staffId).hex;
+        // Get which staff are currently checked in the filter panel
+        const checkedStaffIds = new Set(
+            [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+        );
 
-        const group = L.layerGroup();
+        // Group logs by staff_id
+        const staffGroups = {};
+        logs.forEach(log => {
+            if (!log.lat || !log.lng) return;
+            if (!staffGroups[log.staff_id]) staffGroups[log.staff_id] = [];
+            staffGroups[log.staff_id].push([log.lat, log.lng]);
+        });
 
-        L.polyline(coords, {
-            color: color,
-            weight: 3,
-            opacity: 0.80,
-            dashArray: '8, 6',   // dashed line
-            lineJoin: 'round'
-        }).addTo(group);
+        // Draw dashed polyline + start/end markers per staff
+        Object.entries(staffGroups).forEach(([staffId, coords]) => {
+            if (coords.length < 2) return;
 
-        // Start dot (green) and end dot (red) — tooltip shows staff id
-        L.circleMarker(coords[0], { radius: 7, color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
-            .bindTooltip(`${staffId}: เริ่ม`, { permanent: false }).addTo(group);
-        L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 1, weight: 2 })
-            .bindTooltip(`${staffId}: ล่าสุด`, { permanent: false }).addTo(group);
+            const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
+            const color = getStaffColor(staffId).hex;
 
-        if (isVisible) group.addTo(map);
-        historyPathLayers[staffId] = group;
-    });
+            const group = L.layerGroup();
 
-    // Fit map to visible paths
-    const visibleCoords = Object.entries(staffGroups)
-        .filter(([id]) => checkedStaffIds.size === 0 || checkedStaffIds.has(id))
-        .flatMap(([, coords]) => coords);
-    if (visibleCoords.length > 1) {
-        // Adjust padding based on screen size, on mobile don't pad as much
-        const pad = window.innerWidth > 768 ? 50 : 20;
-        map.fitBounds(visibleCoords, { padding: [pad, pad] });
+            L.polyline(coords, {
+                color: color,
+                weight: 3,
+                opacity: 0.80,
+                dashArray: '8, 6',   // dashed line
+                lineJoin: 'round'
+            }).addTo(group);
+
+            // Start dot (green) and end dot (red) — tooltip shows staff id
+            L.circleMarker(coords[0], { radius: 7, color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
+                .bindTooltip(`${staffId}: เริ่ม`, { permanent: false }).addTo(group);
+            L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 1, weight: 2 })
+                .bindTooltip(`${staffId}: ล่าสุด`, { permanent: false }).addTo(group);
+
+            if (isVisible) group.addTo(map);
+            historyPathLayers[staffId] = group;
+        });
+
+        // Fit map to visible paths
+        const visibleCoords = Object.entries(staffGroups)
+            .filter(([id]) => checkedStaffIds.size === 0 || checkedStaffIds.has(id))
+            .flatMap(([, coords]) => coords);
+        if (visibleCoords.length > 1) {
+            // Adjust padding based on screen size, on mobile don't pad as much
+            const pad = window.innerWidth > 768 ? 50 : 20;
+            map.fitBounds(visibleCoords, { padding: [pad, pad] });
+        }
+    } catch (e) {
+        console.error("updatePathHistory Error:", e);
+    } finally {
+        toggleLoading(false);
     }
 }
 
