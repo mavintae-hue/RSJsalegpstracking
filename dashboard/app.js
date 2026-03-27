@@ -783,6 +783,7 @@ async function updatePathHistory() {
 
         // Update the Distance KPI for the selected range
         calculateDistanceInRange(startInput, endInput);
+        calculateMonthlyDistance(startInput, endInput);
 
     } catch (e) {
         console.error("updatePathHistory Error:", e);
@@ -970,18 +971,32 @@ function subscribeToGPSLogs() {
         .subscribe();
 }
 
-async function calculateMonthlyDistance() {
+async function calculateMonthlyDistance(startDate = null, endDate = null) {
     if (!supabaseClient) return;
 
     const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const dateParts = new Date().toLocaleString('sv-SE', options).split(' ')[0].split('-');
-    const year = dateParts[0];
-    const month = dateParts[1];
-    
-    const startOfMonth = `${year}-${month}-01T00:00:00+07:00`;
-    const endOfToday = new Date().toLocaleString('sv-SE', options).split(' ')[0] + 'T23:59:59+07:00';
+    let tStart, tEnd;
 
-    const logs = await fetchLogsPaginated(startOfMonth, endOfToday, 'staff_id, lat, lng, timestamp');
+    if (!startDate || !endDate) {
+        // Default: Current full month
+        const nowParts = new Date().toLocaleString('sv-SE', options).split(' ')[0].split('-');
+        tStart = `${nowParts[0]}-${nowParts[1]}-01T00:00:00+07:00`;
+        // Last day of current month
+        const lastDay = new Date(nowParts[0], nowParts[1], 0).getDate();
+        tEnd = `${nowParts[0]}-${nowParts[1]}-${String(lastDay).padStart(2, '0')}T23:59:59+07:00`;
+    } else {
+        // Expand range to cover ALL months involved from start to end
+        const startParts = startDate.split('-');
+        const endParts = endDate.split('-');
+        
+        tStart = `${startParts[0]}-${startParts[1]}-01T00:00:00+07:00`;
+        
+        // Find last day of the end month
+        const lastDayOfEnd = new Date(endParts[0], endParts[1], 0).getDate();
+        tEnd = `${endParts[0]}-${endParts[1]}-${String(lastDayOfEnd).padStart(2, '0')}T23:59:59+07:00`;
+    }
+
+    const logs = await fetchLogsPaginated(tStart, tEnd, 'staff_id, lat, lng, timestamp');
 
     if (!logs) return;
     const el = document.getElementById('stat-distance-monthly');
