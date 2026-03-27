@@ -11,6 +11,41 @@ let plottedCustomerIds = new Set();
 let territoryPolygons = [];
 let allStaffs = [];
 
+// Centralized Staff Color System
+const STAFF_COLORS_MAP = [
+    { hex: '#3b82f6', tw: 'blue' },
+    { hex: '#f97316', tw: 'orange' },
+    { hex: '#8b5cf6', tw: 'purple' },
+    { hex: '#14b8a6', tw: 'teal' },
+    { hex: '#f59e0b', tw: 'amber' },
+    { hex: '#ec4899', tw: 'pink' },
+    { hex: '#10b981', tw: 'emerald' },
+    { hex: '#6366f1', tw: 'indigo' },
+    { hex: '#f43f5e', tw: 'rose' },
+    { hex: '#06b6d4', tw: 'cyan' },
+    { hex: '#84cc16', tw: 'lime' },
+    { hex: '#7c3aed', tw: 'violet' },
+    { hex: '#d946ef', tw: 'fuchsia' },
+    { hex: '#0ea5e9', tw: 'sky' },
+    { hex: '#ef4444', tw: 'red' },
+    { hex: '#64748b', tw: 'slate' },
+    { hex: '#2263eb', tw: 'blue' },
+    { hex: '#16a34a', tw: 'green' },
+    { hex: '#d97706', tw: 'amber' },
+    { hex: '#4f46e5', tw: 'indigo' }
+];
+
+function getStaffColor(staffId) {
+    if (!allStaffs || allStaffs.length === 0) {
+        // Basic hash for when allStaffs is not yet populated
+        const hash = Array.from(staffId || "").reduce((a, c) => a + c.charCodeAt(0), 0);
+        return STAFF_COLORS_MAP[hash % STAFF_COLORS_MAP.length];
+    }
+    const idx = allStaffs.findIndex(s => s.id === staffId);
+    if (idx === -1) return STAFF_COLORS_MAP[0];
+    return STAFF_COLORS_MAP[idx % STAFF_COLORS_MAP.length];
+}
+
 // New UI State
 let stats = {
     totalStaff: 0,
@@ -124,19 +159,13 @@ async function loadCustomers() {
     territoryPolygons.forEach(p => { if (map.hasLayer(p)) map.removeLayer(p); });
     territoryPolygons = [];
 
-    const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#10b981', '#6366f1'];
-    const staffColorMap = {};
     const storesByStaff = {};
 
     customers.forEach(cust => {
         if (!cust.lat || !cust.lng || isNaN(cust.lat) || isNaN(cust.lng)) return;
 
         const sid = cust.staff_id || '_none';
-        if (!staffColorMap[sid]) {
-            const idx = Object.keys(staffColorMap).length;
-            staffColorMap[sid] = staffColors[idx % staffColors.length];
-        }
-        const color = staffColorMap[sid];
+        const color = getStaffColor(sid).hex;
 
         // Plot small circle marker
         const marker = L.circleMarker([cust.lat, cust.lng], {
@@ -227,13 +256,6 @@ async function loadTerritories() {
     territoryPolygons.forEach(p => map.removeLayer(p));
     territoryPolygons = [];
 
-    // Same color mapping as markers
-    const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#10b981', '#6366f1'];
-    const staffColorMap = {};
-    if (allStaffs && allStaffs.length) {
-        allStaffs.forEach((s, idx) => staffColorMap[s.id] = staffColors[idx % staffColors.length]);
-    }
-
     mappings.forEach(m => {
         if (!m.territory || !m.territory.geojson) return;
 
@@ -243,11 +265,7 @@ async function loadTerritories() {
         }
 
         const staffId = m.staff_id;
-        // Assign a color or fallback
-        if (!staffColorMap[staffId]) {
-            staffColorMap[staffId] = staffColors[Object.keys(staffColorMap).length % staffColors.length];
-        }
-        const color = staffColorMap[staffId];
+        const color = getStaffColor(staffId).hex;
 
         // Draw Polygon
         const polygonLayer = L.geoJSON(geojsonObj, {
@@ -282,16 +300,11 @@ window.toggleTerritories = function () {
 };
 
 // Custom sophisticated icon for staff
-function createStaffIcon(route, colorName, isOutOfBounds = false, status = 'online') {
-    const colorMap = {
-        blue: { bg: 'bg-blue-600', text: 'text-blue-600' },
-        orange: { bg: 'bg-orange-500', text: 'text-orange-500' },
-        purple: { bg: 'bg-purple-600', text: 'text-purple-600' },
-        teal: { bg: 'bg-teal-500', text: 'text-teal-500' },
-        amber: { bg: 'bg-amber-600', text: 'text-amber-600' }
-    };
+function createStaffIcon(route, colorNameOrId, isOutOfBounds = false, status = 'online') {
+    const colorInfo = getStaffColor(route);
+    const twColor = colorInfo.tw;
 
-    let c = colorMap[colorName] || colorMap.blue;
+    let c = { bg: `bg-${twColor}-600`, text: `text-${twColor}-600` };
     let fallbackText = c.text;
     
     // Status colors
@@ -330,14 +343,14 @@ function updateFilterCheckboxes() {
     container.innerHTML = '';
 
     allStaffs.forEach((staff, index) => {
-        const colors = ['blue-600', 'orange-500', 'purple-600', 'teal-500', 'amber-600'];
-        const color = colors[index % colors.length];
+        const colorInfo = getStaffColor(staff.id);
+        const color = `${colorInfo.tw}-600`;
 
         const html = `
             <label class="cursor-pointer inline-flex items-center select-none hover:-translate-y-0.5 transition-transform w-full">
                 <input type="checkbox" value="${staff.id}" class="route-filter filter-checkbox hidden" checked onchange="updateMapFiltersWithHistory()">
                 <span class="filter-label w-full justify-center px-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-300 flex items-center shadow-sm">
-                    <span class="w-2 h-2 rounded-full bg-${color.split('-')[0]}-600 mr-1"></span> ${staff.id}
+                    <span class="w-2 h-2 rounded-full bg-${color} mr-1"></span> ${staff.id}
                 </span>
             </label>
         `;
@@ -424,8 +437,7 @@ async function loadLatestStaffLocations() {
         uniqueIds.forEach(id => {
             if (!activeStaffs.find(s => s.id === id)) {
                 console.log("Auto-discovered unregistered staff:", id);
-                const colors = ['blue', 'orange', 'purple', 'teal', 'amber'];
-                activeStaffs.push({ id: id, name: id, color: colors[activeStaffs.length % colors.length] });
+                activeStaffs.push({ id: id, name: id, color: getStaffColor(id).hex });
             }
         });
     }
@@ -703,11 +715,6 @@ async function updatePathHistory() {
         [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
     );
 
-    // Assign a deterministic color per staff (same order as allStaffs)
-    const staffColors = ['#3b82f6', '#f97316', '#8b5cf6', '#14b8a6', '#f59e0b'];
-    const staffColorMap = {};
-    allStaffs.forEach((s, i) => { staffColorMap[s.id] = staffColors[i % staffColors.length]; });
-
     // Group logs by staff_id
     const staffGroups = {};
     logs.forEach(log => {
@@ -721,7 +728,7 @@ async function updatePathHistory() {
         if (coords.length < 2) return;
 
         const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
-        const color = staffColorMap[staffId] || '#64748b';
+        const color = getStaffColor(staffId).hex;
 
         const group = L.layerGroup();
 
