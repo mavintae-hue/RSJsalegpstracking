@@ -94,7 +94,7 @@ function initMap() {
     loadLatestStaffLocations();
     subscribeToGPSLogs();
     loadTableData();
-    calculateTodayDistance();
+    calculateDistanceInRange(); // Default: today
 }
 
 // ----------------------------------------------------
@@ -779,6 +779,10 @@ async function updatePathHistory() {
             const pad = window.innerWidth > 768 ? 50 : 20;
             map.fitBounds(visibleCoords, { padding: [pad, pad] });
         }
+
+        // Update the Distance KPI for the selected range
+        calculateDistanceInRange(startInput, endInput);
+
     } catch (e) {
         console.error("updatePathHistory Error:", e);
     } finally {
@@ -885,13 +889,23 @@ function updateMapFiltersWithHistory() {
     }
 }
 
-async function calculateTodayDistance() {
+async function calculateDistanceInRange(startDate = null, endDate = null) {
     if (!supabaseClient) return;
 
-    const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const today = new Date().toLocaleString('sv-SE', options).split(' ')[0];
+    let tStart, tEnd;
 
-    const logs = await fetchLogsPaginated(`${today}T00:00:00+07:00`, `${today}T23:59:59+07:00`, 'staff_id, lat, lng, timestamp');
+    if (!startDate || !endDate) {
+        // Fallback or default to TODAY in Asia/Bangkok
+        const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const today = new Date().toLocaleString('sv-SE', options).split(' ')[0];
+        tStart = `${today}T00:00:00+07:00`;
+        tEnd = `${today}T23:59:59+07:00`;
+    } else {
+        tStart = `${startDate}T00:00:00+07:00`;
+        tEnd = `${endDate}T23:59:59+07:00`;
+    }
+
+    const logs = await fetchLogsPaginated(tStart, tEnd, 'staff_id, lat, lng, timestamp');
 
     if (!logs) return;
     if (logs.length < 2) {
@@ -949,7 +963,7 @@ function subscribeToGPSLogs() {
                 addRealtimeAlert('update', `ส่งพิกัด ความเร็ว ${newLog.speed || 0} km/h`, timeStr, staff.id);
             }
 
-            calculateTodayDistance(); // Update distance KPI
+            calculateDistanceInRange(); // Update distance KPI (today)
         })
         .subscribe();
 }
