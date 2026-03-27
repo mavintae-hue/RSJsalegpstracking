@@ -185,12 +185,7 @@ async function loadCustomers() {
         `);
 
         marker.isVisited = visitedStoreIds.has(cust.id);
-
-        // Hide unvisited feature requested by user Defaults to true (checked) if not toggled manually
-        const cx = document.getElementById('hide-unvisited-cx');
-        if (cx) cx.checked = true; // Force default checked state per user request
-
-        const hideUnvisited = document.getElementById('hide-unvisited-cx')?.checked ?? true;
+        const hideUnvisited = document.getElementById('hide-unvisited-cx')?.checked;
 
         if (marker.isVisited || !hideUnvisited) {
             marker.addTo(map);
