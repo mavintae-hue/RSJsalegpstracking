@@ -724,6 +724,10 @@ async function updatePathHistory() {
         });
         historyPathLayers = {};
 
+        // Important: Still update the Distance KPIs even if logs are empty (to show 0)
+        calculateDistanceInRange(startInput, endInput);
+        calculateMonthlyDistance(startInput, endInput);
+
         if (!logs || logs.length === 0) return;
 
         // Get which staff are currently checked in the filter panel
@@ -775,11 +779,6 @@ async function updatePathHistory() {
             const pad = window.innerWidth > 768 ? 50 : 20;
             map.fitBounds(visibleCoords, { padding: [pad, pad] });
         }
-
-        // Update the Distance KPI for the selected range
-        calculateDistanceInRange(startInput, endInput);
-        calculateMonthlyDistance(startInput, endInput);
-
     } catch (e) {
         console.error("updatePathHistory Error:", e);
     } finally {
