@@ -94,7 +94,8 @@ function initMap() {
     loadLatestStaffLocations();
     subscribeToGPSLogs();
     loadTableData();
-    calculateDistanceInRange(); // Default: today
+    calculateDistanceInRange(); // Today's distance
+    calculateMonthlyDistance(); // Monthly total km
 }
 
 // ----------------------------------------------------
@@ -963,9 +964,49 @@ function subscribeToGPSLogs() {
                 addRealtimeAlert('update', `ส่งพิกัด ความเร็ว ${newLog.speed || 0} km/h`, timeStr, staff.id);
             }
 
-            calculateDistanceInRange(); // Update distance KPI (today)
+            calculateDistanceInRange(); // Update today total
+            calculateMonthlyDistance(); // Update monthly total
         })
         .subscribe();
+}
+
+async function calculateMonthlyDistance() {
+    if (!supabaseClient) return;
+
+    const options = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const dateParts = new Date().toLocaleString('sv-SE', options).split(' ')[0].split('-');
+    const year = dateParts[0];
+    const month = dateParts[1];
+    
+    const startOfMonth = `${year}-${month}-01T00:00:00+07:00`;
+    const endOfToday = new Date().toLocaleString('sv-SE', options).split(' ')[0] + 'T23:59:59+07:00';
+
+    const logs = await fetchLogsPaginated(startOfMonth, endOfToday, 'staff_id, lat, lng, timestamp');
+
+    if (!logs) return;
+    const el = document.getElementById('stat-distance-monthly');
+    if (!el) return;
+
+    if (logs.length < 2) {
+        el.textContent = '0';
+        return;
+    }
+
+    // Group by staff and sum Haversine distances
+    const distByStaff = {};
+    logs.forEach(log => {
+        if (!log.lat || !log.lng) return;
+        if (!distByStaff[log.staff_id]) distByStaff[log.staff_id] = { prev: null, total: 0 };
+        const entry = distByStaff[log.staff_id];
+        if (entry.prev) {
+            entry.total += haversineKm(entry.prev[0], entry.prev[1], log.lat, log.lng);
+        }
+        entry.prev = [log.lat, log.lng];
+    });
+
+    // Sum all staff distances for a monthly fleet total
+    const totalKm = Object.values(distByStaff).reduce((sum, d) => sum + d.total, 0);
+    el.textContent = totalKm.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 // ----------------------------------------------------
