@@ -10,6 +10,7 @@ let customerMarkers = [];
 let plottedCustomerIds = new Set();
 let territoryPolygons = [];
 let allStaffs = [];
+let latestStaffLogsMap = {}; // Global cache for most recent staff data
 
 // Centralized Staff Color System
 const STAFF_COLORS_MAP = [
@@ -336,15 +337,27 @@ function createStaffIcon(route, colorNameOrId, isOutOfBounds = false, status = '
 
 function updateFilterCheckboxes() {
     const container = document.getElementById('filter-container');
+    if (!container) return;
+
+    // Capture current checked state to preserve it
+    const currentChecked = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+    const hasExistingCheckboxes = document.querySelectorAll('.route-filter').length > 0;
+
     container.innerHTML = '';
 
     allStaffs.forEach((staff, index) => {
         const colorInfo = getStaffColor(staff.id);
         const color = `${colorInfo.tw}-600`;
 
+        // Default to checked ONLY if we are initializing for the first time
+        // Otherwise, respect the previous state
+        const isChecked = hasExistingCheckboxes ? currentChecked.has(staff.id) : true;
+
         const html = `
             <label class="cursor-pointer inline-flex items-center select-none hover:-translate-y-0.5 transition-transform w-full">
-                <input type="checkbox" value="${staff.id}" class="route-filter filter-checkbox hidden" checked onchange="updateMapFiltersWithHistory()">
+                <input type="checkbox" value="${staff.id}" class="route-filter filter-checkbox hidden" ${isChecked ? 'checked' : ''} onchange="updateMapFiltersWithHistory()">
                 <span class="filter-label w-full justify-center px-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-300 flex items-center shadow-sm">
                     <span class="w-2 h-2 rounded-full bg-${color} mr-1"></span> ${staff.id}
                 </span>
@@ -363,22 +376,23 @@ window.setAllFilters = function (state) {
     updateMapFiltersWithHistory();
 };
 
-function updateOfflineStaffUI(latestLogsMap, targetTimeMs) {
+function updateOfflineStaffUI(logsMap = null, targetTimeMs = Date.now()) {
     const container = document.getElementById('offline-staff-container');
     if (!container) return;
 
+    const dataMap = logsMap || latestStaffLogsMap;
     const offlineStaffs = [];
 
-    // Filter checked staff IDs only, or all if none checked
+    // Filter checked staff IDs only
     const checkedStaffIds = new Set(
         [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
     );
 
     allStaffs.forEach(staff => {
         // Skip if staff is filtered out by the user checkboxes
-        if (checkedStaffIds.size > 0 && !checkedStaffIds.has(staff.id)) return;
+        if (!checkedStaffIds.has(staff.id)) return;
 
-        const log = latestLogsMap[staff.id];
+        const log = dataMap[staff.id];
         // If no log at all, or older than 30 minutes relative to the target time
         if (!log) {
             offlineStaffs.push(staff.id);
@@ -450,8 +464,7 @@ async function loadLatestStaffLocations() {
     stats.outOfBounds = 0;
 
     let allBounds = [];
-
-    const liveLogsMap = {};
+    latestStaffLogsMap = {}; // Reset global cache before refill
 
     for (const staff of allStaffs) {
         const { data: logs, error: logErr } = await supabaseClient
@@ -464,21 +477,21 @@ async function loadLatestStaffLocations() {
         let latestLog = logs && logs.length > 0 ? logs[0] : null;
 
         if (latestLog && latestLog.lat && latestLog.lng) {
-            liveLogsMap[staff.id] = latestLog;
+            latestStaffLogsMap[staff.id] = latestLog;
             updateMarkerUI(staff, latestLog);
             allBounds.push([latestLog.lat, latestLog.lng]);
             if (latestLog.speed > 0) stats.driving++;
-            // Note: out-of-bounds requires geofencing checks, skipping for UI stat speed
         }
     }
 
-    // Auto center map to show all staffs
-    if (allBounds.length > 0 && map) {
+    // Auto center map to show all staffs only on initial load
+    if (allBounds.length > 0 && map && !window._mapCentered) {
         map.fitBounds(allBounds, { maxZoom: 15, padding: [50, 50] });
+        window._mapCentered = true;
     }
 
     updateStatsUI();
-    updateOfflineStaffUI(liveLogsMap, new Date().getTime());
+    updateOfflineStaffUI(latestStaffLogsMap, new Date().getTime());
 }
 
 function updateMarkerUI(staff, logData, forceHistoryStyle = false, referenceTimeMs = Date.now()) {
@@ -581,10 +594,10 @@ function updateOutOfBoundsStat() {
                 const staffIdMatch = layer.options.icon.options.html.match(/<div class="[^"]*">([^<]+)<\/div>\s*<i class="ph-fill ph-car-profile/);
                 if (staffIdMatch && staffIdMatch[1]) {
                     const id = staffIdMatch[1].trim();
-                    if (checkedStaffIds.size === 0 || checkedStaffIds.has(id)) {
+                    if (checkedStaffIds.has(id)) {
                         outCount++;
                     }
-                } else {
+                } else if (checkedStaffIds.size > 0) {
                     outCount++; // Fallback
                 }
             }
@@ -747,7 +760,7 @@ async function updatePathHistory() {
         Object.entries(staffGroups).forEach(([staffId, coords]) => {
             if (coords.length < 2) return;
 
-            const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
+            const isVisible = checkedStaffIds.has(staffId);
             const color = getStaffColor(staffId).hex;
 
             const group = L.layerGroup();
@@ -772,7 +785,7 @@ async function updatePathHistory() {
 
         // Fit map to visible paths
         const visibleCoords = Object.entries(staffGroups)
-            .filter(([id]) => checkedStaffIds.size === 0 || checkedStaffIds.has(id))
+            .filter(([id]) => checkedStaffIds.has(id))
             .flatMap(([, coords]) => coords);
         if (visibleCoords.length > 1) {
             // Adjust padding based on screen size, on mobile don't pad as much
@@ -845,7 +858,7 @@ function scrubTimeHistory() {
 
     // Update marker UI positions based on computed history
     for (const staff of allStaffs) {
-        const isVisible = checkedStaffIds.size === 0 || checkedStaffIds.has(staff.id);
+        const isVisible = checkedStaffIds.has(staff.id);
         const group = staffMapLayers[staff.id];
         const logData = latestLogsPerStaff[staff.id];
 
@@ -872,7 +885,7 @@ function updateMapFiltersWithHistory() {
     );
 
     Object.entries(historyPathLayers).forEach(([staffId, group]) => {
-        const shouldShow = checkedStaffIds.size === 0 || checkedStaffIds.has(staffId);
+        const shouldShow = checkedStaffIds.has(staffId);
         if (shouldShow && !map.hasLayer(group)) group.addTo(map);
         if (!shouldShow && map.hasLayer(group)) map.removeLayer(group);
     });
@@ -881,7 +894,9 @@ function updateMapFiltersWithHistory() {
     if (isHistoricalPlayback) {
         scrubTimeHistory(); // Will re-evaluate offline UI with scrub time
     } else {
-        loadLatestStaffLocations(); // Reweigh live statuses
+        // CRITICAL FIX: Don't call loadLatestStaffLocations() here to avoid reset and jumping
+        updateOfflineStaffUI(); 
+        updateOutOfBoundsStat();
     }
 }
 
@@ -945,6 +960,9 @@ function subscribeToGPSLogs() {
                 stats.totalStaff = allStaffs.length;
                 updateStatsUI();
             }
+
+            // Update Global Cache
+            latestStaffLogsMap[newLog.staff_id] = newLog;
 
             // Update UI Map
             if (newLog.lat && newLog.lng) {
