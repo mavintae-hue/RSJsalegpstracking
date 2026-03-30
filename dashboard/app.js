@@ -11,6 +11,7 @@ let plottedCustomerIds = new Set();
 let territoryPolygons = [];
 let allStaffs = [];
 let latestStaffLogsMap = {}; // Global cache for most recent staff data
+let allCustomersData = []; // Cache for all store data
 
 // Centralized Staff Color System
 const STAFF_COLORS_MAP = [
@@ -152,6 +153,8 @@ async function loadCustomers() {
         .not('lat', 'is', null).not('lng', 'is', null);
 
     if (error || !customers) { console.error('loadCustomers error', error); return; }
+
+    allCustomersData = customers; // Cache for dynamic stat updates
 
     // Remove previously plotted customer markers
     customerMarkers.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
@@ -374,6 +377,8 @@ window.setAllFilters = function (state) {
     const checkboxes = document.querySelectorAll('.route-filter');
     checkboxes.forEach(cb => cb.checked = state);
     updateMapFiltersWithHistory();
+    // After toggling all, update the counter UI
+    updateAllStats();
 };
 
 function updateOfflineStaffUI(logsMap = null, targetTimeMs = Date.now()) {
@@ -426,6 +431,53 @@ function updateMapFiltersDB() {
             }
         }
     });
+
+    // Stats were updated here, but moved to updateAllStats for central management
+}
+
+function updateAllStats() {
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    // 1. Total Staff Filtered
+    stats.totalStaff = checkedStaffIds.size;
+
+    // 2. Driving Count (Filtered)
+    let drivingCount = 0;
+    Object.entries(latestStaffLogsMap).forEach(([id, log]) => {
+        if (checkedStaffIds.has(id)) {
+            if (log.speed > 0) drivingCount++;
+        }
+    });
+    stats.driving = drivingCount;
+
+    // 3. Store Stats (Total & Visited)
+    let storeTotal = 0;
+    let visitedTotal = 0;
+    allCustomersData.forEach(cust => {
+        const sid = cust.staff_id || '_none';
+        if (checkedStaffIds.has(sid)) {
+            storeTotal++;
+            // We use the dot markers to find visited status or our global set
+            if (plottedCustomerIds.has(`${cust.lat},${cust.lng}`)) {
+                visitedTotal++;
+            }
+        }
+    });
+    stats.totalStores = storeTotal;
+    stats.visitingStore = visitedTotal;
+
+    // 4. Update UI for simple stats
+    updateStatsUI();
+
+    // 5. Update specialized UI panels
+    updateOfflineStaffUI();
+    updateOutOfBoundsStat();
+
+    // 6. Refresh distances with current filters
+    calculateDistanceInRange();
+    calculateMonthlyDistance();
 }
 
 async function loadLatestStaffLocations() {
@@ -490,8 +542,7 @@ async function loadLatestStaffLocations() {
         window._mapCentered = true;
     }
 
-    updateStatsUI();
-    updateOfflineStaffUI(latestStaffLogsMap, new Date().getTime());
+    updateAllStats();
 }
 
 function updateMarkerUI(staff, logData, forceHistoryStyle = false, referenceTimeMs = Date.now()) {
@@ -895,8 +946,7 @@ function updateMapFiltersWithHistory() {
         scrubTimeHistory(); // Will re-evaluate offline UI with scrub time
     } else {
         // CRITICAL FIX: Don't call loadLatestStaffLocations() here to avoid reset and jumping
-        updateOfflineStaffUI(); 
-        updateOutOfBoundsStat();
+        updateAllStats();
     }
 }
 
@@ -937,8 +987,14 @@ async function calculateDistanceInRange(startDate = null, endDate = null) {
         entry.prev = [log.lat, log.lng];
     });
 
-    // Sum all staff distances for a fleet total
-    const totalKm = Object.values(distByStaff).reduce((sum, d) => sum + d.total, 0);
+    // Sum selected staff distances only
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    const totalKm = Object.entries(distByStaff)
+        .filter(([id]) => checkedStaffIds.has(id))
+        .reduce((sum, [, d]) => sum + d.total, 0);
 
     // Update the UI stat element
     const el = document.getElementById('stat-distance-today');
@@ -1031,8 +1087,15 @@ async function calculateMonthlyDistance(startDate = null, endDate = null) {
         entry.prev = [log.lat, log.lng];
     });
 
-    // Sum all staff distances for a monthly fleet total
-    const totalKm = Object.values(distByStaff).reduce((sum, d) => sum + d.total, 0);
+    // Sum selected staff distances only
+    const checkedStaffIds = new Set(
+        [...document.querySelectorAll('.route-filter:checked')].map(cb => cb.value)
+    );
+
+    const totalKm = Object.entries(distByStaff)
+        .filter(([id]) => checkedStaffIds.has(id))
+        .reduce((sum, [, d]) => sum + d.total, 0);
+
     el.textContent = totalKm.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
